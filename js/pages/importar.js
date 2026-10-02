@@ -1,7 +1,7 @@
 /* =====================================================================
  * Página: Importar dados
  * ---------------------------------------------------------------------
- * Carrega as TAREFAS a partir dos arquivos "Atividades-TRJ_FMMT" da pasta
+ * Carrega as TAREFAS a partir dos arquivos "Atividades-TMG_FMMT" da pasta
  * de Downloads. Dois caminhos: leitura automática (Chrome/Edge) ou upload
  * manual (qualquer navegador).
  *
@@ -188,7 +188,7 @@
 
       // Status atual do slot
       if (si) {
-        var nomeCurto = si.nome.replace(/Atividades-TRJ_FMMT_?/i, '').replace(/\.xlsx?$/i, '') || si.nome;
+        var nomeCurto = si.nome.replace(/Atividades-TMG_FMMT_?/i, '').replace(/\.xlsx?$/i, '') || si.nome;
         card.appendChild(U.h('div', {
           class: 'flex items-center gap-2 p-2 rounded',
           style: { background: 'rgba(46,204,113,.08)', border: '1px solid rgba(46,204,113,.25)', fontSize: '12px' }
@@ -241,7 +241,7 @@
     // Slot 1 — Agendada (arquivo com data de hoje)
     tarefasGrid.appendChild(makeSlot({
       tipo: 'ag', label: 'Planilha agendada (data de hoje)', icon: '📅',
-      filtroLabel: 'Atividades-TRJ_FMMT_DD_MM_AA',
+      filtroLabel: 'Atividades-TMG_FMMT_DATA',
       slotInfo: slots.ag,
       onClear: function () { FS.clearSlotAg(); }
     }));
@@ -249,7 +249,7 @@
     // Slot 2 — Não-agendada
     tarefasGrid.appendChild(makeSlot({
       tipo: 'na', label: 'Planilha não-agendada', icon: '📋',
-      filtroLabel: 'Atividades-TRJ_FMMT_Não-agendada',
+      filtroLabel: 'Atividades-TMG_FMMT_Não-agendada',
       slotInfo: slots.na,
       onClear: function () { FS.clearSlotNa(); }
     }));

@@ -1,12 +1,12 @@
 /* =====================================================================
- * files.js  —  LEITURA DE ARQUIVOS "Atividades-TRJ_FMMT" (Excel)
+ * files.js  —  LEITURA DE ARQUIVOS "Atividades-TMG_FMMT" (Excel)
  * ---------------------------------------------------------------------
  * As TAREFAS (tickets) e os INCIDENTES NÃO ficam mais na planilha Google.
  * Eles são lidos diretamente aqui no navegador, a partir dos arquivos que
  * caem na sua pasta de Downloads:
  *
- *   • Atividades-TRJ_FMMT_<DATA>        -> tarefas agendadas
- *   • Atividades-TRJ_FMMT_Não-agendada  -> tarefas não agendadas
+ *   • Atividades-TMG_FMMT_<DATA>        -> tarefas agendadas
+ *   • Atividades-TMG_FMMT_Não-agendada  -> tarefas não agendadas
  *
  * Há dois caminhos:
  *   1) "Conectar pasta" (Chrome/Edge): usa a File System Access API.
@@ -126,7 +126,7 @@
   function isExcelName(name) { return /\.xlsx?$/i.test(name || ''); }
   function isAtividadesFile(name) {
     var n = norm(name);
-    return isExcelName(name) && n.indexOf('atividades-trj_fmmt') >= 0;
+    return isExcelName(name) && n.indexOf('atividades-tmg_fmmt') >= 0;
   }
   function isNaoAgendada(name) {
     var n = norm(name);
@@ -282,7 +282,7 @@
     }
     // 2ª passada: lê os poucos arquivos que importam, em paralelo (bem mais rápido
     // que um `await` por arquivo dentro do loop, principalmente com vários
-    // "Atividades-TRJ_FMMT_<data>" acumulados).
+    // "Atividades-TMG_FMMT_<data>" acumulados).
     var files = await Promise.all(entries.map(function (e) { return e.getFile(); }));
     return entries.map(function (entry, i) {
       var file = files[i];
@@ -412,7 +412,7 @@
       // os arquivos já foram movidos pra "Importados" numa verificação
       // anterior — não é erro, só não tem nada novo desde então.
       if (mem.tasks.length) return { total: mem.tasks.length, arquivos: (mem.meta && mem.meta.tasks && mem.meta.tasks.arquivos) || [], unchanged: true };
-      throw new Error('Nenhum arquivo "Atividades-TRJ_FMMT" foi encontrado na pasta conectada (confira se já não foram movidos para a subpasta "Importados").');
+      throw new Error('Nenhum arquivo "Atividades-TMG_FMMT" foi encontrado na pasta conectada (confira se já não foram movidos para a subpasta "Importados").');
     }
     var sig = buildSignature(matches);
     if (sig && sig === monitor.lastSignature) {
@@ -465,7 +465,7 @@
   F.readManualFiles = async function (fileList, onProgress) {
     var files = Array.prototype.slice.call(fileList || []);
     var xls = files.filter(function (f) { return isExcelName(f.name); });
-    if (!xls.length) throw new Error('Selecione um ou mais arquivos .xlsx (Atividades-TRJ_FMMT).');
+    if (!xls.length) throw new Error('Selecione um ou mais arquivos .xlsx (Atividades-TMG_FMMT).');
     var matches = xls.map(function (f) {
       return { name: f.name, file: f, naoAgendada: isNaoAgendada(f.name), key: dateKey(f.name, f.lastModified) };
     });
