@@ -1,5 +1,5 @@
-/* Constantes operacionais do sistema TMG (adaptado do controle-operacional TRJ) */
-(function (TRJ) {
+/* Constantes operacionais do sistema TMG (adaptado do controle-operacional TMG) */
+(function (TMG) {
   var C = {};
 
   C.REGIOES = ['ANF31', 'ANF32', 'ANF33', 'ANF34', 'ANF35', 'ANF37', 'ANF38', 'OTHERS'];
@@ -63,9 +63,9 @@
     { label: '> 6h', min: 360, max: Infinity, cor: '#3498db' }
   ];
 
-  C.CORES_TRJ = { orange: '#ff8c00', orange2: '#ffb347', red: '#e74c3c', green: '#2ecc71', blue: '#3498db' };
+  C.CORES_TMG = { orange: '#ff8c00', orange2: '#ffb347', red: '#e74c3c', green: '#2ecc71', blue: '#3498db' };
 
   C.DONUT_CORES = ['#ff8c00', '#ffb347', '#ff6b35', '#9aa5b1'];
 
-  TRJ.constants = C;
-})(window.TRJ = window.TRJ || {});
+  TMG.constants = C;
+})(window.TMG = window.TMG || {});

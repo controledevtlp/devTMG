@@ -1,5 +1,5 @@
 ﻿/* ============================================================
- * Página: Mapa Operacional TRJ
+ * Página: Mapa Operacional TMG
  * ============================================================
  * Mapa Leaflet com dados de sites vindos da ponte local
  * (http://localhost:5057/api/mapa) que acessa o PHP interno
@@ -12,14 +12,14 @@
  *  • Marcadores Hub FO
  *  • Busca por site, END_ID ou cidade
  * ============================================================ */
-(function (TRJ) {
-  TRJ.pages = TRJ.pages || {};
-  var U = TRJ.ui, C = TRJ.constants;
+(function (TMG) {
+  TMG.pages = TMG.pages || {};
+  var U = TMG.ui, C = TMG.constants;
 
-  var LS_COORDS   = 'trj_coordMap';
-  var LS_MW       = 'trj_mwData';
-  var LS_FO       = 'trj_foData';
-  var LS_MARKERS  = 'trj_mapaMarkers';  // sites fora com coordenadas (markerData do Genesis)
+  var LS_COORDS   = 'tmg_coordMap';
+  var LS_MW       = 'tmg_mwData';
+  var LS_FO       = 'tmg_foData';
+  var LS_MARKERS  = 'tmg_mapaMarkers';  // sites fora com coordenadas (markerData do Genesis)
   var PONTE_URL   = 'http://localhost:5057';
 
   // ── Cores exatas do mapa original ───────────────────────────
@@ -52,7 +52,7 @@
     saveLS(LS_FO, foData);
     if (markers !== undefined) saveLS(LS_MARKERS, markers);
   }
-  TRJ.mapaSetDados = salvarMapaDados;
+  TMG.mapaSetDados = salvarMapaDados;
 
   // ── Parsear Genesis Mapa HTML → markerData + mwData + foData + coordMap ──
   // markerData = sites fora com campos: NEName, Latitude, Longitude, ENDID, tempo, queda …
@@ -112,17 +112,17 @@
       coordCount: Object.keys(coordMap).length, siteCount: markerData.length
     };
   }
-  TRJ.mapaParseGenesis = parseGenesisParaMapa;
+  TMG.mapaParseGenesis = parseGenesisParaMapa;
 
   // ── PÁGINA ─────────────────────────────────────────────────
-  TRJ.pages.mapa = function(container, ctx) {
+  TMG.pages.mapa = function(container, ctx) {
     var data      = ctx.data || {};
     var readOnly  = !!ctx.readOnly;
     var incidents = data.incidentsEnriched || [];
     var tasks     = data.tasksEnriched     || [];
 
     // Dados de mapa: contexto > localStorage > estáticos embutidos > vazio
-    var coordMap = ctx.mapaCoordMap || loadLS(LS_COORDS) || TRJ.defaultCoordMap || {};
+    var coordMap = ctx.mapaCoordMap || loadLS(LS_COORDS) || TMG.defaultCoordMap || {};
     var mapaMarkers = loadLS(LS_MARKERS) || [];
 
     // mwData e foData: formato compacto [la,loa,lb,lob,enlace2,forn] → normalizar para objetos
@@ -134,8 +134,8 @@
       if (!Array.isArray(x)) return x;
       return { LAT_A: x[0], LONG_A: x[1], HUB: x[2], NEName: x[3] };
     }
-    var rawMw = ctx.mapaMwData || loadLS(LS_MW) || TRJ.defaultMwData || [];
-    var rawFo = ctx.mapaFoData || loadLS(LS_FO) || TRJ.defaultFoData || [];
+    var rawMw = ctx.mapaMwData || loadLS(LS_MW) || TMG.defaultMwData || [];
+    var rawFo = ctx.mapaFoData || loadLS(LS_FO) || TMG.defaultFoData || [];
     var mwData = rawMw.map(_normMw);
     var foData = rawFo.map(_normFo);
 
@@ -156,13 +156,13 @@
     var sitesFlag1 = [], sitesFlag0Raw = [];
 
     // ── Geocodificação TSK (Nominatim) — cache em localStorage ───────────
-    var GEO_CACHE_KEY = 'trj_geo_cache';
+    var GEO_CACHE_KEY = 'tmg_geo_cache';
     var geoCache = (function() { try { return JSON.parse(localStorage.getItem(GEO_CACHE_KEY)||'{}'); } catch(e){ return {}; } })();
     function geocodificarEndereco(logradouro, cidade, bairro, cb) {
       var q = [logradouro, bairro, cidade, 'Brasil'].filter(Boolean).join(', ');
       if (geoCache[q]) { cb(null, geoCache[q]); return; }
       fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(q), {
-        headers: { 'Accept-Language': 'pt-BR,pt', 'User-Agent': 'ControleTRJ/1.0' }
+        headers: { 'Accept-Language': 'pt-BR,pt', 'User-Agent': 'ControleTMG/1.0' }
       })
       .then(function(r){ return r.json(); })
       .then(function(data){
@@ -197,7 +197,7 @@
 
     // ── Barra de controles ─────────────────────────────────────
     var searchInput = U.h('input', {
-      class: 'trj-input',
+      class: 'tmg-input',
       placeholder: 'Buscar por site, END_ID ou cidade...',
       style: { flex: '1', maxWidth: '340px', fontSize: '13px' }
     });
@@ -212,17 +212,17 @@
     var ckMW    = mkCheck('Enlaces MW'); ckMW.chk.checked = true;
     var ckFO    = mkCheck('Hubs FO');
 
-    var statsEl = U.h('div', { style: { fontSize:'12px', color:'var(--trj-muted)', display:'flex', gap:'14px', flexWrap:'wrap', alignItems:'center' } });
+    var statsEl = U.h('div', { style: { fontSize:'12px', color:'var(--tmg-muted)', display:'flex', gap:'14px', flexWrap:'wrap', alignItems:'center' } });
 
     // Botão buscar via ponte
     var btnPonte = U.h('button', {
-      class: 'trj-btn trj-btn-primary clickable',
+      class: 'tmg-btn tmg-btn-primary clickable',
       style: { fontSize:'12px', padding:'4px 14px', display:'inline-flex', alignItems:'center', gap:'6px' }
     }, [U.h('span',{text:'Buscar sites (ponte + VPN)' })]);
 
     // Botão importar HTML (fallback)
     var btnImport = U.h('button', {
-      class: 'trj-btn trj-btn-ghost clickable',
+      class: 'tmg-btn tmg-btn-ghost clickable',
       style: { fontSize:'12px', padding:'4px 12px', display:'inline-flex', alignItems:'center', gap:'6px', opacity:'0.8' }
     }, [U.h('span',{text:'Importar Genesis HTML' })]);
     var fileInput = U.h('input', { type:'file', accept:'.html,.htm', style:{ display:'none' } });
@@ -230,7 +230,7 @@
 
     var ctrlBar = U.h('div', {
       style: { display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap', marginBottom:'10px',
-               padding:'10px 14px', background:'var(--trj-card)', borderRadius:'10px', border:'1px solid var(--trj-border)',
+               padding:'10px 14px', background:'var(--tmg-card)', borderRadius:'10px', border:'1px solid var(--tmg-border)',
                position:'relative', zIndex:'1' }
     }, [searchInput, ckFlag0.el, ckMW.el, ckFO.el]
        .concat(readOnly ? [] : [U.h('div', {style:{marginLeft:'auto',display:'flex',gap:'8px'}}, [btnPonte, btnImport])]));
@@ -264,16 +264,16 @@
         var inp = U.h('input', {
           type: 'text', list: dlId,
           placeholder: 'ENDID ou nome do site...',
-          style: { flex:'1', background:'var(--trj-card2)', border:'1px solid var(--trj-border)',
-                   borderRadius:'6px', color:'var(--trj-fg)', padding:'4px 8px', fontSize:'12px',
+          style: { flex:'1', background:'var(--tmg-card2)', border:'1px solid var(--tmg-border)',
+                   borderRadius:'6px', color:'var(--tmg-fg)', padding:'4px 8px', fontSize:'12px',
                    outline:'none' }
         });
         var btnX = U.h('button', {
-          style: { background:'none', border:'none', color:'var(--trj-muted)', cursor:'pointer', fontSize:'15px', lineHeight:'1', padding:'0 4px', flexShrink:'0' },
+          style: { background:'none', border:'none', color:'var(--tmg-muted)', cursor:'pointer', fontSize:'15px', lineHeight:'1', padding:'0 4px', flexShrink:'0' },
           text: '×'
         });
         var badge = U.h('span', {
-          style: { fontSize:'11px', fontWeight:'700', color:'var(--trj-primary)', width:'16px', textAlign:'center', flexShrink:'0' },
+          style: { fontSize:'11px', fontWeight:'700', color:'var(--tmg-primary)', width:'16px', textAlign:'center', flexShrink:'0' },
           text: letras[idx] || String(idx+1)
         });
         var linha = U.h('div', { style: { display:'flex', alignItems:'center', gap:'6px' } },
@@ -297,15 +297,15 @@
       pontosWrap.appendChild(criarLinhaPonto(1));
 
       var btnAdd = U.h('button', {
-        class: 'trj-btn trj-btn-ghost clickable',
+        class: 'tmg-btn tmg-btn-ghost clickable',
         style: { fontSize:'11px', padding:'2px 10px' }, text: '+ Adicionar ponto'
       });
       var btnCalc = U.h('button', {
-        class: 'trj-btn trj-btn-primary clickable',
+        class: 'tmg-btn tmg-btn-primary clickable',
         style: { fontSize:'11px', padding:'2px 12px' }, text: 'Calcular Rota'
       });
       var btnLimpar = U.h('button', {
-        class: 'trj-btn trj-btn-ghost clickable',
+        class: 'tmg-btn tmg-btn-ghost clickable',
         style: { fontSize:'11px', padding:'2px 10px' }, text: 'Limpar'
       });
 
@@ -353,14 +353,14 @@
       var bodyEl = U.h('div', { style:{marginTop:'8px',display:'none'} }, [pontosWrap, acoesEl, resultDiv]);
 
       var toggleBtn = U.h('button', {
-        style:{background:'none',border:'none',color:'var(--trj-muted)',cursor:'pointer',fontSize:'12px',padding:'0'},
+        style:{background:'none',border:'none',color:'var(--tmg-muted)',cursor:'pointer',fontSize:'12px',padding:'0'},
         text: '▸'
       });
 
       var headerEl = U.h('div', {
         style:{display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}
       }, [
-        U.h('span',{style:{fontSize:'12px',fontWeight:'600',color:'var(--trj-fg)'},text:'📏 Calcular Rota de Atendimento'}),
+        U.h('span',{style:{fontSize:'12px',fontWeight:'600',color:'var(--tmg-fg)'},text:'📏 Calcular Rota de Atendimento'}),
         toggleBtn
       ]);
       headerEl.addEventListener('click', function() {
@@ -370,7 +370,7 @@
       });
 
       rotaPainelEl = U.h('div', {
-        style:{background:'var(--trj-card)',border:'1px solid var(--trj-border)',borderRadius:'8px',
+        style:{background:'var(--tmg-card)',border:'1px solid var(--tmg-border)',borderRadius:'8px',
                padding:'10px 14px',marginTop:'6px',marginBottom:'2px',position:'relative',zIndex:'1'}
       }, [headerEl, bodyEl]);
       container.appendChild(rotaPainelEl);
@@ -379,9 +379,9 @@
     // ── Container do mapa ──────────────────────────────────────
     // z-index do mapa menor que a sidebar (a sidebar usa z-index 200+)
     var mapDiv = U.h('div', {
-      id: 'trj-mapa-leaflet',
+      id: 'tmg-mapa-leaflet',
       style: { height:'65vh', borderRadius:'12px', overflow:'hidden',
-               border:'1px solid var(--trj-border)', marginTop:'10px',
+               border:'1px solid var(--tmg-border)', marginTop:'10px',
                position:'relative', zIndex:'0' }
     });
     container.appendChild(mapDiv);
@@ -400,7 +400,7 @@
       { cor:'#2ecc71', shape:'square', label:'Hub FO' },
       { cor:'#aaa', shape:'thickline', label:'Linha grossa = enlace de site fora', noClick:true },
     ];
-    var legEl = U.h('div', { style: { display:'flex', gap:'12px', flexWrap:'wrap', marginTop:'8px', fontSize:'11px', color:'var(--trj-muted)' } },
+    var legEl = U.h('div', { style: { display:'flex', gap:'12px', flexWrap:'wrap', marginTop:'8px', fontSize:'11px', color:'var(--tmg-muted)' } },
       legItems.map(function(item) {
         var ico;
         if (item.shape === 'thickline') {
@@ -459,7 +459,7 @@
 
     function initMap() {
       if (mapInstance) return;
-      mapInstance = window.L.map('trj-mapa-leaflet', { preferCanvas: true, zoomControl: true })
+      mapInstance = window.L.map('tmg-mapa-leaflet', { preferCanvas: true, zoomControl: true })
         .setView([-22.3, -43.1], 8);
 
       window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -513,7 +513,7 @@
       if (!mapInstance || pts.length < 2) return;
       if (rotaLayer) { rotaLayer.remove(); rotaLayer = null; }
       resultDiv.style.display = 'block';
-      resultDiv.innerHTML = '<span style="color:var(--trj-muted)">⏳ Calculando rota...</span>';
+      resultDiv.innerHTML = '<span style="color:var(--tmg-muted)">⏳ Calculando rota...</span>';
 
       var waypoints = pts.map(function(p){ return p.lon+','+p.lat; }).join(';');
       var url = 'https://router.project-osrm.org/route/v1/driving/'+waypoints+'?overview=full&geometries=geojson&steps=false';
@@ -530,22 +530,22 @@
           mapInstance.fitBounds(rotaLayer.getBounds().pad(0.15), { maxZoom:14 });
 
           var legs = rota.legs || [];
-          var html = '<div style="border-radius:6px;overflow:hidden;border:1px solid var(--trj-border)">';
+          var html = '<div style="border-radius:6px;overflow:hidden;border:1px solid var(--tmg-border)">';
           var totDist=0, totDur=0;
           legs.forEach(function(leg,i){
             var km=(leg.distance/1000).toFixed(1);
             var t=fmtTempo(Math.round(leg.duration));
             totDist+=leg.distance; totDur+=leg.duration;
-            html+='<div style="padding:5px 10px;border-bottom:1px solid var(--trj-border);display:flex;gap:10px;align-items:baseline">'
-              +'<b style="color:var(--trj-primary);white-space:nowrap">'+'ABCDEFGHIJKLMNOP'[i]+' → '+'ABCDEFGHIJKLMNOP'[i+1]+'</b>'
-              +'<span style="color:var(--trj-muted);font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+            html+='<div style="padding:5px 10px;border-bottom:1px solid var(--tmg-border);display:flex;gap:10px;align-items:baseline">'
+              +'<b style="color:var(--tmg-primary);white-space:nowrap">'+'ABCDEFGHIJKLMNOP'[i]+' → '+'ABCDEFGHIJKLMNOP'[i+1]+'</b>'
+              +'<span style="color:var(--tmg-muted);font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
               +pts[i].nome+' → '+pts[i+1].nome+'</span>'
               +'<span style="color:#2ecc71;white-space:nowrap">🚗 '+km+' km</span>'
               +' <span style="color:#3498db;white-space:nowrap">⏱ '+t+'</span>'
               +'</div>';
           });
           if (legs.length>1) {
-            html+='<div style="padding:5px 10px;background:var(--trj-card2);display:flex;gap:14px;font-weight:700">'
+            html+='<div style="padding:5px 10px;background:var(--tmg-card2);display:flex;gap:14px;font-weight:700">'
               +'<span>Total</span>'
               +'<span style="color:#2ecc71">🚗 '+(totDist/1000).toFixed(1)+' km</span>'
               +'<span style="color:#3498db">⏱ '+fmtTempo(Math.round(totDur))+'</span>'
@@ -556,17 +556,17 @@
         })
         .catch(function(){
           // Fallback: linha reta com Haversine
-          var html='<div style="color:var(--trj-muted);font-size:11px;margin-bottom:4px">OSRM indisponível — distância em linha reta:</div>'
-            +'<div style="border-radius:6px;overflow:hidden;border:1px solid var(--trj-border)">';
+          var html='<div style="color:var(--tmg-muted);font-size:11px;margin-bottom:4px">OSRM indisponível — distância em linha reta:</div>'
+            +'<div style="border-radius:6px;overflow:hidden;border:1px solid var(--tmg-border)">';
           var totKm=0;
           var latlngs = pts.map(function(p){ return [p.lat,p.lon]; });
           for (var i=0;i<pts.length-1;i++){
             var km=haversineKm(pts[i].lat,pts[i].lon,pts[i+1].lat,pts[i+1].lon);
             totKm+=km;
-            html+='<div style="padding:5px 10px;border-bottom:1px solid var(--trj-border);display:flex;gap:10px">'
-              +'<b style="color:var(--trj-primary)">'+'ABCDEFGH'[i]+' → '+'ABCDEFGH'[i+1]+'</b>'
-              +'<span style="color:var(--trj-muted);flex:1">'+pts[i].nome+' → '+pts[i+1].nome+'</span>'
-              +'<span style="color:var(--trj-primary)">~'+km.toFixed(1)+' km (reta)</span>'
+            html+='<div style="padding:5px 10px;border-bottom:1px solid var(--tmg-border);display:flex;gap:10px">'
+              +'<b style="color:var(--tmg-primary)">'+'ABCDEFGH'[i]+' → '+'ABCDEFGH'[i+1]+'</b>'
+              +'<span style="color:var(--tmg-muted);flex:1">'+pts[i].nome+' → '+pts[i+1].nome+'</span>'
+              +'<span style="color:var(--tmg-primary)">~'+km.toFixed(1)+' km (reta)</span>'
               +'</div>';
           }
           if (pts.length>2) html+='<div style="padding:5px 10px;font-weight:700">Total reta: ~'+totKm.toFixed(1)+' km</div>';
@@ -681,7 +681,7 @@
                    + '<br><button onclick="(function(){' +
                      'var el=document.getElementById(\'' + popId + '\');' +
                      'var btn=el.querySelector(\'.geo-btn\');btn.textContent=\'Geocodificando...\';btn.disabled=true;' +
-                     'TRJ._geocodTSK(\'' + eid + '\',' + lat + ',' + lon + ',\'' + encodeURIComponent(tsk.enderecoLogradouro||'') + '\',\'' + encodeURIComponent(tsk.cidade||'') + '\',\'' + encodeURIComponent(tsk.bairro||'') + '\', el);' +
+                     'TMG._geocodTSK(\'' + eid + '\',' + lat + ',' + lon + ',\'' + encodeURIComponent(tsk.enderecoLogradouro||'') + '\',\'' + encodeURIComponent(tsk.cidade||'') + '\',\'' + encodeURIComponent(tsk.bairro||'') + '\', el);' +
                    '})()" class="geo-btn" style="margin-top:4px;font-size:10px;padding:2px 7px;background:rgba(52,152,219,.15);color:#3498db;border:1px solid #3498db;border-radius:4px;cursor:pointer">📍 Ver endereço no mapa</button>'
                    : '')
               : '<span style="color:#e74c3c">Sem TSK aberta</span>')
@@ -839,7 +839,7 @@
                    + '<br><button onclick="(function(){' +
                      'var el=document.getElementById(\'' + popId2 + '\');' +
                      'var btn=el.querySelector(\'.geo-btn\');btn.textContent=\'Geocodificando...\';btn.disabled=true;' +
-                     'TRJ._geocodTSK(\'' + eid + '\',' + coords[0] + ',' + coords[1] + ',\'' + encodeURIComponent(tsk.enderecoLogradouro||'') + '\',\'' + encodeURIComponent(tsk.cidade||'') + '\',\'' + encodeURIComponent(tsk.bairro||'') + '\', el);' +
+                     'TMG._geocodTSK(\'' + eid + '\',' + coords[0] + ',' + coords[1] + ',\'' + encodeURIComponent(tsk.enderecoLogradouro||'') + '\',\'' + encodeURIComponent(tsk.cidade||'') + '\',\'' + encodeURIComponent(tsk.bairro||'') + '\', el);' +
                    '})()" class="geo-btn" style="margin-top:4px;font-size:10px;padding:2px 7px;background:rgba(52,152,219,.15);color:#3498db;border:1px solid #3498db;border-radius:4px;cursor:pointer">📍 Ver endereço no mapa</button>'
                    : '')
               : '<span style="color:#e74c3c">Sem TSK aberta</span>')
@@ -870,8 +870,8 @@
       var items = [
         { text:'Sites fora no mapa: ' + total, cor:'#e74c3c' },
         { text:'Com TSK aberta: ' + comTSK, cor:'#3498db' },
-        { text:'Sem coordenadas: ' + semCoord, cor:'var(--trj-muted)' },
-        { text:'Enlaces MW: ' + mwData.length, cor:'var(--trj-muted)' },
+        { text:'Sem coordenadas: ' + semCoord, cor:'var(--tmg-muted)' },
+        { text:'Enlaces MW: ' + mwData.length, cor:'var(--tmg-muted)' },
         { text:'Hubs FO: ' + foData.length, cor:'#2ecc71' },
       ];
       items.forEach(function(item) {
@@ -905,7 +905,7 @@
           });
         })
         .catch(function(e) {
-          U.toast('Ponte não disponível. Use "Importar Genesis HTML" ou inicie o ponte_trj.py.', 'err');
+          U.toast('Ponte não disponível. Use "Importar Genesis HTML" ou inicie o ponte_tmg.py.', 'err');
         })
         .finally(function() { btnPonte.textContent = 'Buscar sites (ponte + VPN)'; btnPonte.disabled = false; });
     }
@@ -932,7 +932,7 @@
     });
 
     // ── Handler global de geocodificação para callbacks nos popups ───────
-    TRJ._geocodTSK = function(eid, latGenesis, lonGenesis, endEnc, cidEnc, bairroEnc, el) {
+    TMG._geocodTSK = function(eid, latGenesis, lonGenesis, endEnc, cidEnc, bairroEnc, el) {
       var log = decodeURIComponent(endEnc), cid = decodeURIComponent(cidEnc), bai = decodeURIComponent(bairroEnc);
       geocodificarEndereco(log, cid, bai, function(err, res) {
         var btn = el && el.querySelector('.geo-btn');
@@ -986,4 +986,4 @@
     });
   };
 
-})(window.TRJ = window.TRJ || {});
+})(window.TMG = window.TMG || {});

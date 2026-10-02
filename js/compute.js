@@ -1,8 +1,8 @@
 /* Agregacoes e enriquecimento (portado de app/api/*) */
-(function (TRJ) {
-  var C = TRJ.constants;
-  var D = TRJ.domain;
-  var G = TRJ.genesis;
+(function (TMG) {
+  var C = TMG.constants;
+  var D = TMG.domain;
+  var G = TMG.genesis;
   var C2 = {};
 
   function up(s) { return (s == null ? '' : s).toString().toUpperCase().trim(); }
@@ -678,5 +678,5 @@
   C2.drillTasks = drillTasks;
   C2.drillIncidents = drillIncidents;
   C2.agruparIncidentesPorEndId = agruparIncidentesPorEndId;
-  TRJ.compute = C2;
-})(window.TRJ = window.TRJ || {});
+  TMG.compute = C2;
+})(window.TMG = window.TMG || {});

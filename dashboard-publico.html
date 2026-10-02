@@ -30,46 +30,46 @@ body { min-height: 100vh; }
 
 /* ---- Tela de boas-vindas ---- */
 .welcome-wrap { min-height: 86vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
-.welcome-logo { width: 64px; height: 64px; object-fit: contain; margin-bottom: 18px; filter: drop-shadow(0 0 16px var(--trj-primary)); }
+.welcome-logo { width: 64px; height: 64px; object-fit: contain; margin-bottom: 18px; filter: drop-shadow(0 0 16px var(--tmg-primary)); }
 .welcome-title { font-family: 'Sora', sans-serif; font-size: 30px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 6px; }
-.welcome-sub { color: var(--trj-muted); font-size: 15px; margin-bottom: 34px; }
+.welcome-sub { color: var(--tmg-muted); font-size: 15px; margin-bottom: 34px; }
 .regiao-grid { display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; gap: 12px; width: 100%; margin-bottom: 16px; }
 @media (max-width: 900px) { .regiao-grid { flex-wrap: wrap; } }
 @media (max-width: 640px) { .regiao-grid { grid-template-columns: repeat(2, 1fr); } }
 .regiao-btn {
-  position: relative; overflow: hidden; flex: 0 1 160px; min-width: 140px; max-width: 200px; background: var(--trj-card); border: 1px solid var(--trj-border);
+  position: relative; overflow: hidden; flex: 0 1 160px; min-width: 140px; max-width: 200px; background: var(--tmg-card); border: 1px solid var(--tmg-border);
   border-radius: 14px; padding: 22px 14px; cursor: pointer; transition: transform .22s cubic-bezier(.4,0,.2,1), border-color .22s ease, box-shadow .22s ease;
-  display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--trj-fg);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--tmg-fg);
 }
-.regiao-btn::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--trj-primary); opacity: 0; transition: opacity .22s ease; }
+.regiao-btn::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--tmg-primary); opacity: 0; transition: opacity .22s ease; }
 .regiao-btn:hover { transform: translateY(-5px); border-color: rgba(255,140,0,.55); box-shadow: 0 18px 38px rgba(0,0,0,.5), 0 0 26px rgba(255,140,0,.18); }
 .regiao-btn:hover::before { opacity: 1; }
 .regiao-btn .ic { font-size: 26px; transition: transform .22s ease; }
 .regiao-btn:hover .ic { transform: scale(1.18) rotate(-3deg); }
 .regiao-btn .nome { font-size: 14px; font-weight: 700; }
-.regiao-btn .qtd { font-size: 11px; color: var(--trj-muted); }
+.regiao-btn .qtd { font-size: 11px; color: var(--tmg-muted); }
 .visao-geral-btn {
   width: 100%; max-width: 760px; background: rgba(255,140,0,.06); border: 1px solid rgba(255,140,0,.3);
-  border-radius: 14px; padding: 16px; cursor: pointer; transition: all .22s ease; color: var(--trj-fg);
+  border-radius: 14px; padding: 16px; cursor: pointer; transition: all .22s ease; color: var(--tmg-fg);
   display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; font-size: 14.5px;
 }
-.visao-geral-btn:hover { background: rgba(255,140,0,.12); border-color: var(--trj-primary); box-shadow: 0 10px 28px rgba(255,140,0,.18); transform: translateY(-2px); }
+.visao-geral-btn:hover { background: rgba(255,140,0,.12); border-color: var(--tmg-primary); box-shadow: 0 10px 28px rgba(255,140,0,.18); transform: translateY(-2px); }
 
 /* ---- barra superior da view de dashboard ---- */
 .pub-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
-.pub-live { font-size: 11.5px; color: var(--trj-muted); display: flex; align-items: center; gap: 7px; }
-.pub-live .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--trj-green); box-shadow: 0 0 7px var(--trj-green); animation: trjPulseLive 2s infinite; }
-@keyframes trjPulseLive { 0%,100%{opacity:1;} 50%{opacity:.35;} }
+.pub-live { font-size: 11.5px; color: var(--tmg-muted); display: flex; align-items: center; gap: 7px; }
+.pub-live .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tmg-green); box-shadow: 0 0 7px var(--tmg-green); animation: tmgPulseLive 2s infinite; }
+@keyframes tmgPulseLive { 0%,100%{opacity:1;} 50%{opacity:.35;} }
 </style>
 </head>
 <body>
-<div id="root"><div class="text-center py-20" style="color:var(--trj-muted)">Carregando dados publicados...</div></div>
+<div id="root"><div class="text-center py-20" style="color:var(--tmg-muted)">Carregando dados publicados...</div></div>
 <div id="dev-footer-mount" style="max-width:1400px;margin:0 auto;padding:0 22px;position:relative;z-index:1;"></div>
 
 <script>
 (function () {
-  var U = TRJ.ui, C = TRJ.constants, D = TRJ.domain, Comp = TRJ.compute;
-  var URL_API = (TRJ.config && TRJ.config.APPS_SCRIPT_URL) || '';
+  var U = TMG.ui, C = TMG.constants, D = TMG.domain, Comp = TMG.compute;
+  var URL_API = (TMG.config && TMG.config.APPS_SCRIPT_URL) || '';
   var root = document.getElementById('root');
 
   var raw = { tasksEnriched: [], incidentsEnriched: [] };
@@ -88,13 +88,13 @@ body { min-height: 100vh; }
 
   // ── Carregamento ────────────────────────────────────────────────────────────
   async function carregarDados(silencioso) {
-    if (!URL_API) { root.innerHTML = '<div class="text-center py-20" style="color:var(--trj-red)">URL do Apps Script não configurada (js/config.js).</div>'; return; }
+    if (!URL_API) { root.innerHTML = '<div class="text-center py-20" style="color:var(--tmg-red)">URL do Apps Script não configurada (js/config.js).</div>'; return; }
     try {
       var resp = await fetch(URL_API + '?action=getDashboardSnapshot');
       var json = await resp.json();
       if (!json || json.ok === false) throw new Error((json && json.error) || 'Erro ao buscar dados.');
       if (!json.data) {
-        if (!silencioso) root.innerHTML = '<div class="text-center py-20" style="color:var(--trj-muted)">Ainda não há nenhuma publicação.<br>Abra o Dashboard no painel principal pelo menos uma vez.</div>';
+        if (!silencioso) root.innerHTML = '<div class="text-center py-20" style="color:var(--tmg-muted)">Ainda não há nenhuma publicação.<br>Abra o Dashboard no painel principal pelo menos uma vez.</div>';
         return;
       }
       raw.tasksEnriched = json.data.tasksEnriched || [];
@@ -109,37 +109,37 @@ body { min-height: 100vh; }
       }
       if (json.data.mapaCoordMap) {
         raw._mapaCoordMap = json.data.mapaCoordMap;
-        _lsSave('trj_coordMap', json.data.mapaCoordMap);
+        _lsSave('tmg_coordMap', json.data.mapaCoordMap);
       } else {
         // Tentar recuperar do localStorage como fallback
-        try { raw._mapaCoordMap = JSON.parse(localStorage.getItem('trj_coordMap') || 'null'); } catch(e){}
+        try { raw._mapaCoordMap = JSON.parse(localStorage.getItem('tmg_coordMap') || 'null'); } catch(e){}
       }
       if (json.data.mapaMwSlim && json.data.mapaMwSlim.length) {
         var mwFull = json.data.mapaMwSlim.map(function(l) {
           return { Enlace2:l.E2, LAT_A:l.LA, LONG_A:l.LO, LAT_B:l.LB, LONG_B:l.LOB, FORNECEDOR:l.F };
         });
         raw._mapaMwData = mwFull;
-        _lsSave('trj_mwData', mwFull);
+        _lsSave('tmg_mwData', mwFull);
       } else {
-        try { raw._mapaMwData = JSON.parse(localStorage.getItem('trj_mwData') || 'null'); } catch(e){}
+        try { raw._mapaMwData = JSON.parse(localStorage.getItem('tmg_mwData') || 'null'); } catch(e){}
       }
       if (json.data.mapaFoSlim && json.data.mapaFoSlim.length) {
         var foFull = json.data.mapaFoSlim.map(function(h) {
           return { NEName:h.N, HUB:h.H, LAT_A:h.LA, LONG_A:h.LO, FORNECEDOR:h.F };
         });
         raw._mapaFoData = foFull;
-        _lsSave('trj_foData', foFull);
+        _lsSave('tmg_foData', foFull);
       } else {
-        try { raw._mapaFoData = JSON.parse(localStorage.getItem('trj_foData') || 'null'); } catch(e){}
+        try { raw._mapaFoData = JSON.parse(localStorage.getItem('tmg_foData') || 'null'); } catch(e){}
       }
       renderView();
       // Se o usuário já estava na aba de mapa, re-renderizar com os dados novos
-      if (view === 'mapa' && root.querySelector('#trj-mapa-leaflet')) {
+      if (view === 'mapa' && root.querySelector('#tmg-mapa-leaflet')) {
         root.innerHTML = '';
         renderMapaPublico();
       }
     } catch (e) {
-      if (!silencioso) root.innerHTML = '<div class="text-center py-20" style="color:var(--trj-red)">Não foi possível carregar: ' + U.esc(e.message || String(e)) + '</div>';
+      if (!silencioso) root.innerHTML = '<div class="text-center py-20" style="color:var(--tmg-red)">Não foi possível carregar: ' + U.esc(e.message || String(e)) + '</div>';
     }
   }
 
@@ -154,14 +154,14 @@ body { min-height: 100vh; }
   function renderMapaPublico() {
     root.innerHTML = '';
     var btnVoltarMapa = U.h('button', {
-      class: 'trj-btn trj-btn-ghost clickable', text: '← Dashboard',
+      class: 'tmg-btn tmg-btn-ghost clickable', text: '← Dashboard',
       onclick: function () { view = 'dashboard'; renderView(); }
     });
     root.appendChild(U.h('div', { class: 'pub-topbar' }, [btnVoltarMapa, liveElGlobal()]));
     var mapaContainer = U.h('div');
     root.appendChild(mapaContainer);
-    if (TRJ.pages && TRJ.pages.mapa) {
-      TRJ.pages.mapa(mapaContainer, {
+    if (TMG.pages && TMG.pages.mapa) {
+      TMG.pages.mapa(mapaContainer, {
         data: raw,
         readOnly: true,
         // Passar dados do mapa diretamente pelo contexto (evita depender só do localStorage)
@@ -170,25 +170,25 @@ body { min-height: 100vh; }
         mapaFoData:   raw._mapaFoData   || null
       });
     } else {
-      mapaContainer.appendChild(U.h('p', { style:{color:'var(--trj-muted)',padding:'20px'}, text:'Módulo de mapa não carregado.' }));
+      mapaContainer.appendChild(U.h('p', { style:{color:'var(--tmg-muted)',padding:'20px'}, text:'Módulo de mapa não carregado.' }));
     }
   }
   // ── SLA / Aderência (versão pública) ──────────────────────────────────────
   function renderSlaPublico() {
     root.innerHTML = '';
     var btnV = U.h('button', {
-      class:'trj-btn trj-btn-ghost clickable', text:'← Dashboard',
+      class:'tmg-btn tmg-btn-ghost clickable', text:'← Dashboard',
       onclick: function(){ view='dashboard'; renderView(); }
     });
     root.appendChild(U.h('div', { class:'pub-topbar' }, [btnV, liveElGlobal()]));
     var slaContainer = U.h('div');
     root.appendChild(slaContainer);
-    if (TRJ.pages && TRJ.pages.sla) {
-      TRJ.pages.sla(slaContainer, {
+    if (TMG.pages && TMG.pages.sla) {
+      TMG.pages.sla(slaContainer, {
         data: raw,
         app: {
           openDrillTasks: function(spec, filtros, title, opts, onCopy) {
-            var Comp = TRJ.compute;
+            var Comp = TMG.compute;
             var rows = Comp.drillTasks(raw.tasksEnriched, spec, filtros||{});
             U.openModal(title||'Detalhamento', U.taskTable(rows, opts||{}), {
               onCopy: onCopy || function(){ return U.taskTableCopyText(rows, title); }
@@ -251,7 +251,7 @@ body { min-height: 100vh; }
 
     var wrap = U.h('div', { class: 'welcome-wrap' }, [
       U.h('img', { src: 'assets/logo-tmg.png', alt: '', class: 'welcome-logo' }),
-      U.h('div', { class: 'welcome-title trj-heading', text: 'BEM-VINDO, GESTOR' }),
+      U.h('div', { class: 'welcome-title tmg-heading', text: 'BEM-VINDO, GESTOR' }),
       U.h('div', { class: 'welcome-sub', text: 'Escolha sua região para visualização' }),
       U.h('div', {
         class: 'regiao-grid',
@@ -276,7 +276,7 @@ body { min-height: 100vh; }
       ]),
       U.h('button', {
         class: 'visao-geral-btn',
-        style: { marginTop: '8px', background: 'rgba(52,152,219,.08)', borderColor: 'rgba(52,152,219,.3)', color: 'var(--trj-fg)' },
+        style: { marginTop: '8px', background: 'rgba(52,152,219,.08)', borderColor: 'rgba(52,152,219,.3)', color: 'var(--tmg-fg)' },
         onclick: function () { view = 'mapa'; renderView(); }
       }, [
         U.h('span', { text: '🗺️' }),
@@ -284,7 +284,7 @@ body { min-height: 100vh; }
       ]),
       U.h('button', {
         class: 'visao-geral-btn',
-        style: { marginTop: '8px', background: 'rgba(46,204,113,.08)', borderColor: 'rgba(46,204,113,.3)', color: 'var(--trj-fg)' },
+        style: { marginTop: '8px', background: 'rgba(46,204,113,.08)', borderColor: 'rgba(46,204,113,.3)', color: 'var(--tmg-fg)' },
         onclick: function () { state.regiao = 'TODAS'; view = 'sla'; renderView(); }
       }, [
         U.h('span', { text: '📊' }),
@@ -450,7 +450,7 @@ body { min-height: 100vh; }
       ['REGION', state.regiao], ['PRIORIDADE', state.prioridades && state.prioridades.length ? state.prioridades.join(',') : 'TODAS'],
       ['GERADO EM', new Date().toLocaleString('pt-BR')]
     ], [40, 20]);
-    var D2 = TRJ.domain;
+    var D2 = TMG.domain;
     var sep = D2.separarTicketsManuais(tasksEnriched||[]);
     var tickets = sep.tickets;
     var backlog = tickets.filter(function(t){
@@ -487,16 +487,16 @@ body { min-height: 100vh; }
     var f = state;
     var topCidades = d.topCidades || {};
     var kpis = [
-      { label: 'FORA DO SLA', value: d.kpis ? d.kpis.foraSla : 0, cor: C.CORES_TRJ.red, spec: { tipo: 'foraSla' }, t: 'Fora do SLA' },
-      { label: 'BACKLOG TOTAL', value: d.kpis ? d.kpis.backlogTotal : 0, cor: C.CORES_TRJ.orange, spec: { tipo: 'backlogTotal' }, t: 'Backlog total' },
-      { label: 'BACKLOG INDEFINIDO', value: d.kpis ? d.kpis.backlogIndef : 0, cor: C.CORES_TRJ.orange2, spec: { tipo: 'backlogIndef' }, t: 'Backlog indefinido' },
+      { label: 'FORA DO SLA', value: d.kpis ? d.kpis.foraSla : 0, cor: C.CORES_TMG.red, spec: { tipo: 'foraSla' }, t: 'Fora do SLA' },
+      { label: 'BACKLOG TOTAL', value: d.kpis ? d.kpis.backlogTotal : 0, cor: C.CORES_TMG.orange, spec: { tipo: 'backlogTotal' }, t: 'Backlog total' },
+      { label: 'BACKLOG INDEFINIDO', value: d.kpis ? d.kpis.backlogIndef : 0, cor: C.CORES_TMG.orange2, spec: { tipo: 'backlogIndef' }, t: 'Backlog indefinido' },
       { label: 'PREDITIVA', value: d.kpis ? d.kpis.preditiva : 0, cor: '#3498db', spec: { tipo: 'preditiva' }, t: 'Preditiva' },
-      { label: 'PRODUTIVIDADE', value: d.kpis ? d.kpis.produtividade : 0, cor: C.CORES_TRJ.green, spec: { tipo: 'produtividade' }, opts: { modoResultado: true }, t: 'TSKs concluídas' },
-      { label: 'SLA GERAL', value: d.kpis ? (d.kpis.slaGeral + '%') : '—', cor: C.CORES_TRJ.green, spec: { tipo: 'produtividade' }, opts: { modoResultado: true }, t: 'TSKs concluídas — % dentro do prazo' }
+      { label: 'PRODUTIVIDADE', value: d.kpis ? d.kpis.produtividade : 0, cor: C.CORES_TMG.green, spec: { tipo: 'produtividade' }, opts: { modoResultado: true }, t: 'TSKs concluídas' },
+      { label: 'SLA GERAL', value: d.kpis ? (d.kpis.slaGeral + '%') : '—', cor: C.CORES_TMG.green, spec: { tipo: 'produtividade' }, opts: { modoResultado: true }, t: 'TSKs concluídas — % dentro do prazo' }
     ];
 
     // Topbar
-    var btnVoltar = U.h('button', { class: 'trj-btn trj-btn-ghost clickable', text: '← Regiões', onclick: function () { view = 'welcome'; renderView(); } });
+    var btnVoltar = U.h('button', { class: 'tmg-btn tmg-btn-ghost clickable', text: '← Regiões', onclick: function () { view = 'welcome'; renderView(); } });
     var liveEl = U.h('div', { class: 'pub-live' }, [
       U.h('span', { class: 'dot' }),
       U.h('span', { text: savedAt ? 'Atualizado em ' + new Date(savedAt).toLocaleString('pt-BR') : 'Dados publicados' })
@@ -506,12 +506,12 @@ body { min-height: 100vh; }
       var wrap = U.h('div', { style: { display: 'flex', gap: '3px', flexWrap: 'wrap', alignItems: 'center' } });
       function mkChip(lbl, ativo, onclick) {
         return U.h('button', {
-          class: 'trj-btn trj-btn-ghost',
+          class: 'tmg-btn tmg-btn-ghost',
           style: {
             fontSize: '10px', padding: '2px 7px', borderRadius: '20px',
             background: ativo ? 'rgba(255,140,0,.25)' : 'rgba(255,255,255,.06)',
-            color: ativo ? 'var(--trj-primary)' : 'var(--trj-muted)',
-            border: '1px solid ' + (ativo ? 'var(--trj-primary)' : 'rgba(255,255,255,.12)'),
+            color: ativo ? 'var(--tmg-primary)' : 'var(--tmg-muted)',
+            border: '1px solid ' + (ativo ? 'var(--tmg-primary)' : 'rgba(255,255,255,.12)'),
             fontWeight: ativo ? '700' : '400', cursor: 'pointer'
           },
           text: lbl, onclick: onclick
@@ -540,17 +540,17 @@ body { min-height: 100vh; }
       U.h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } }, [
         prioSelect,
         U.h('button', {
-          class: 'trj-btn clickable',
+          class: 'tmg-btn clickable',
           style: { fontSize: '11px', padding: '3px 8px', background: 'rgba(52,152,219,.15)', color: '#3498db', border: '1px solid rgba(52,152,219,.3)', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace:'nowrap' },
           onclick: function () { view = 'mapa'; renderView(); }
         }, [U.h('span', {text:'Mapa'})]),
         U.h('button', {
-          class: 'trj-btn clickable',
+          class: 'tmg-btn clickable',
           style: { fontSize: '12px', padding: '4px 12px', background: 'rgba(46,204,113,.15)', color: '#2ecc71', border: '1px solid rgba(46,204,113,.3)', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '5px' },
           onclick: function () { view = 'sla'; renderView(); }
         }, [U.h('span', {text:'📊'}), U.h('span', {text:'SLA'})]),
         U.h('button', {
-          class: 'trj-btn clickable',
+          class: 'tmg-btn clickable',
           style: { fontSize: '11px', padding: '3px 8px', background: 'rgba(46,204,113,.15)', color: '#2ecc71', border: '1px solid rgba(46,204,113,.3)', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace:'nowrap' },
           onclick: function () { exportarExcelPublico(d, raw.tasksEnriched, raw.incidentsEnriched); }
         }, [U.h('span', {text:'📊'}), U.h('span', {text:'Excel'})])
@@ -563,7 +563,7 @@ body { min-height: 100vh; }
     // Charts: Aging + Prazos a Vencer (com botão copiar)
     var aging = U.chartCard('AGING DO BACKLOG');
     var vencBtnCopiar = U.h('button', {
-      class: 'trj-btn trj-btn-ghost clickable',
+      class: 'tmg-btn tmg-btn-ghost clickable',
       style: { fontSize: '11px', padding: '2px 9px', display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid rgba(255,255,255,.15)' },
       onclick: function () { copyText(gerarTextoPrazosTodasRegioes()); }
     }, [U.h('span', { text: '📋' }), U.h('span', { text: 'Copiar' })]);
@@ -573,7 +573,7 @@ body { min-height: 100vh; }
     var sfAgrupar = { value: true };
     var switchSf = U.switch(true, 'AGRUPAR POR END_ID', function (v) { sfAgrupar.value = v; });
     var btnCopiarSF = U.h('button', {
-      class: 'trj-btn trj-btn-ghost clickable',
+      class: 'tmg-btn tmg-btn-ghost clickable',
       style: { fontSize: '11px', padding: '2px 9px', display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1px solid rgba(255,255,255,.15)' },
       onclick: function () { copyText(gerarTextoSitesFora(null)); }
     }, [U.h('span', { text: '📋' }), U.h('span', { text: 'Copiar' })]);
@@ -619,7 +619,7 @@ body { min-height: 100vh; }
       };
       openDrillTasks({ tipo: 'vencimento', arg: i }, f, 'A VENCER: ' + (bucket.label || ''), {}, onCopyDrill);
     }});
-    U.barChart(sites.canvas, sfData.map(function (x) { return { label: x.label.toUpperCase(), total: x.total, cor: C.CORES_TRJ.red }; }), {
+    U.barChart(sites.canvas, sfData.map(function (x) { return { label: x.label.toUpperCase(), total: x.total, cor: C.CORES_TMG.red }; }), {
       onBar: function (i) {
         var tipo = sfAgrupar.value ? 'sitesForaAgrupado' : 'sitesFora';
         var regiao = sfData[i].regiao;
@@ -660,48 +660,48 @@ body { min-height: 100vh; }
     var porAnf = tc.porAnf || [], cidades = tc.cidades || [];
     var anfList = U.h('div', { class: 'flex flex-wrap gap-2 mb-4' }, porAnf.map(function (a) {
       var chip = U.h('button', {
-        class: 'trj-btn trj-btn-ghost',
+        class: 'tmg-btn tmg-btn-ghost',
         style: { fontSize: '12px', transition: 'all .2s ease' },
         onclick: function () { openDrillIncidents({ tipo: 'anf', arg: a.anfRaw }, a.anf); }
       }, [
         U.h('span', { class: 'font-bold', text: a.anf }),
-        U.h('span', { style: { color: 'var(--trj-primary)', marginLeft: '6px' }, text: String(a.total) }),
-        U.h('span', { style: { color: 'var(--trj-muted)', marginLeft: '4px', fontSize: '11px' }, text: '(' + a.pct + '%)' })
+        U.h('span', { style: { color: 'var(--tmg-primary)', marginLeft: '6px' }, text: String(a.total) }),
+        U.h('span', { style: { color: 'var(--tmg-muted)', marginLeft: '4px', fontSize: '11px' }, text: '(' + a.pct + '%)' })
       ]);
       chip.addEventListener('mouseenter', function () { chip.style.transform = 'translateY(-2px)'; chip.style.borderColor = 'rgba(255,140,0,.6)'; chip.style.boxShadow = '0 6px 16px rgba(255,140,0,.2)'; });
       chip.addEventListener('mouseleave', function () { chip.style.transform = ''; chip.style.borderColor = ''; chip.style.boxShadow = ''; });
       return chip;
     }));
     var bars = U.h('div', { class: 'flex flex-col gap-1' }, cidades.slice(0, 15).map(function (c) {
-      var barra = U.h('div', { style: { width: c.pct + '%', height: '8px', borderRadius: '6px', background: 'var(--trj-primary)', transition: 'all .2s ease' } });
+      var barra = U.h('div', { style: { width: c.pct + '%', height: '8px', borderRadius: '6px', background: 'var(--tmg-primary)', transition: 'all .2s ease' } });
       var item = U.h('div', { style: { cursor: 'pointer', padding: '5px 8px', borderRadius: '8px', transition: 'background .18s ease' } }, [
         U.h('div', { class: 'flex justify-between text-xs mb-1' }, [
           U.h('span', { style: { fontWeight: '600' }, text: c.cidade }),
-          U.h('span', { style: { color: 'var(--trj-primary)', fontWeight: '700' }, text: String(c.total) })
+          U.h('span', { style: { color: 'var(--tmg-primary)', fontWeight: '700' }, text: String(c.total) })
         ]),
         U.h('div', { style: { background: 'rgba(255,255,255,.07)', borderRadius: '6px', height: '8px', overflow: 'hidden' } }, barra)
       ]);
-      item.addEventListener('mouseenter', function () { item.style.background = 'rgba(255,140,0,.1)'; barra.style.background = 'var(--trj-primary2)'; barra.style.boxShadow = '0 0 10px rgba(255,140,0,.5)'; });
-      item.addEventListener('mouseleave', function () { item.style.background = ''; barra.style.background = 'var(--trj-primary)'; barra.style.boxShadow = ''; });
+      item.addEventListener('mouseenter', function () { item.style.background = 'rgba(255,140,0,.1)'; barra.style.background = 'var(--tmg-primary2)'; barra.style.boxShadow = '0 0 10px rgba(255,140,0,.5)'; });
+      item.addEventListener('mouseleave', function () { item.style.background = ''; barra.style.background = 'var(--tmg-primary)'; barra.style.boxShadow = ''; });
       item.addEventListener('click', function () { openDrillIncidents({ tipo: 'cidade', arg: c.cidade }, c.cidade); });
       return item;
     }));
     // Total Sites Fora — clicável (todos os incidentes)
     var total = U.h('div', {
-      class: 'trj-card p-5 flex flex-col items-center justify-center clickable',
+      class: 'tmg-card p-5 flex flex-col items-center justify-center clickable',
       style: { minWidth: '180px', cursor: 'pointer' },
       title: 'Clique para ver todos os sites fora',
       onclick: function () { openDrillIncidents({ tipo: 'sitesFora', arg: null }, 'TODOS OS SITES FORA'); }
     }, [
-      U.h('div', { class: 'text-xs uppercase', style: { color: 'var(--trj-muted)' }, text: 'TOTAL SITES FORA' }),
-      U.h('div', { class: 'font-extrabold', style: { fontSize: '56px', color: C.CORES_TRJ.red, lineHeight: '1', textShadow: '0 0 20px rgba(231,76,60,.4)' }, text: U.fmtNum(tc.totalSitesFora) }),
-      U.h('div', { style: { fontSize: '10px', color: 'var(--trj-muted)', marginTop: '4px' }, text: '▼ ver incidentes' })
+      U.h('div', { class: 'text-xs uppercase', style: { color: 'var(--tmg-muted)' }, text: 'TOTAL SITES FORA' }),
+      U.h('div', { class: 'font-extrabold', style: { fontSize: '56px', color: C.CORES_TMG.red, lineHeight: '1', textShadow: '0 0 20px rgba(231,76,60,.4)' }, text: U.fmtNum(tc.totalSitesFora) }),
+      U.h('div', { style: { fontSize: '10px', color: 'var(--tmg-muted)', marginTop: '4px' }, text: '▼ ver incidentes' })
     ]);
-    return U.h('div', { class: 'trj-card p-4' }, [
+    return U.h('div', { class: 'tmg-card p-4' }, [
       U.h('div', { class: 'flex items-center gap-2 mb-3' }, [
-        U.h('span', { class: 'trj-chart-dot' }),
+        U.h('span', { class: 'tmg-chart-dot' }),
         U.h('h3', { class: 'text-sm font-bold', text: 'TOP CIDADES — SITES FORA' }),
-        U.h('span', { class: 'text-xs font-normal', style: { color: 'var(--trj-muted)' }, text: '(clique em qualquer cidade ou ANF para detalhar)' })
+        U.h('span', { class: 'text-xs font-normal', style: { color: 'var(--tmg-muted)' }, text: '(clique em qualquer cidade ou ANF para detalhar)' })
       ]),
       U.h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(min(260px,100%), 1fr))', gap:'14px' } }, [total, U.h('div', null, [anfList, bars])])
     ]);

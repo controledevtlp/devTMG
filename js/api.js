@@ -10,18 +10,18 @@
  * ---------------------------------------------------------------------
  * Se a URL do Apps Script (js/config.js) estiver em branco, o site
  * continua funcionando 100% no navegador, lendo as planilhas pelos
- * uploads (TRJ.files). Nesse caso:
+ * uploads (TMG.files). Nesse caso:
  *   • login            -> aceita qualquer credencial (token local)
  *   • getConfig/setConfig -> usa o localStorage do navegador
  *   • lookupCities     -> retorna mapa vazio (sem enriquecimento de cidade)
  * Quando a URL é preenchida, o comportamento volta a ser 100% backend.
  * ===================================================================== */
-(function (TRJ) {
+(function (TMG) {
   var A = {};
-  var LS_CFG = 'trj_config_offline';
+  var LS_CFG = 'tmg_config_offline';
 
   function getUrl() {
-    var u = (TRJ.config && TRJ.config.APPS_SCRIPT_URL || '').trim();
+    var u = (TMG.config && TMG.config.APPS_SCRIPT_URL || '').trim();
     return u;
   }
   function offline() { return !getUrl(); }
@@ -39,7 +39,7 @@
     if (!url) {
       throw new Error('URL do Apps Script não configurada. Edite o arquivo js/config.js e cole a URL que termina em /exec.');
     }
-    var token = (TRJ.auth && TRJ.auth.getToken && TRJ.auth.getToken()) || '';
+    var token = (TMG.auth && TMG.auth.getToken && TMG.auth.getToken()) || '';
     var body = Object.assign({ action: action, token: token }, params || {});
 
     var resp;
@@ -74,7 +74,7 @@
 
   A.login         = function (email, pwd)  {
     if (offline()) {
-      var mail = (email || '').trim() || 'operador@trj.com';
+      var mail = (email || '').trim() || 'operador@tmg.com';
       return Promise.resolve({ ok: true, token: 'offline-' + Date.now(), user: { email: mail, nome: 'Operador', role: 'admin' } });
     }
     return call('login', { email: email, password: pwd });
@@ -105,7 +105,7 @@
   // Cadastro de sites (usado pela página Cadastro de Cidades).
   A.saveSite      = function (row)         {
     if (offline()) {
-      try { var arr = JSON.parse(localStorage.getItem('trj_sites') || '[]') || []; arr.push(row || {}); localStorage.setItem('trj_sites', JSON.stringify(arr)); } catch (e) {}
+      try { var arr = JSON.parse(localStorage.getItem('tmg_sites') || '[]') || []; arr.push(row || {}); localStorage.setItem('tmg_sites', JSON.stringify(arr)); } catch (e) {}
       return Promise.resolve({ ok: true, offline: true });
     }
     return call('saveSite', { row: row || {} });
@@ -121,7 +121,7 @@
 
   // Histórico de produtividade (dias já processados).
   // Offline: usa localStorage como fallback. Online: sincroniza com GAS.
-  var LS_PROD = 'trj_prod_hist_v1';
+  var LS_PROD = 'tmg_prod_hist_v1';
   A.getProdutividadeHist = function () {
     if (offline()) {
       try { return Promise.resolve({ ok: true, rows: JSON.parse(localStorage.getItem(LS_PROD) || '{}') }); }
@@ -145,7 +145,7 @@
   // Persiste no config do backend (chave "concentradores"). localStorage = cache local.
   A.getConcentradores = function () {
     if (offline()) {
-      try { return Promise.resolve({ ok: true, lista: JSON.parse(localStorage.getItem('trj_concentradores') || '[]') || [] }); }
+      try { return Promise.resolve({ ok: true, lista: JSON.parse(localStorage.getItem('tmg_concentradores') || '[]') || [] }); }
       catch (e) { return Promise.resolve({ ok: true, lista: [] }); }
     }
     return call('getConfig').then(function (res) {
@@ -159,7 +159,7 @@
   };
   A.saveConcentradores = function (lista) {
     // Salva localStorage imediatamente como cache
-    try { localStorage.setItem('trj_concentradores', JSON.stringify(lista || [])); } catch (e) {}
+    try { localStorage.setItem('tmg_concentradores', JSON.stringify(lista || [])); } catch (e) {}
     if (offline()) return Promise.resolve({ ok: true, offline: true });
     // A coluna "valor" do CONFIG_SHEET armazena strings — serializa como JSON
     return call('setConfig', { config: { concentradores: JSON.stringify(lista || []) } });
@@ -168,5 +168,5 @@
   A.call = call;
   A.getUrl = getUrl;
   A.isOffline = offline;
-  TRJ.api = A;
-})(window.TRJ = window.TRJ || {});
+  TMG.api = A;
+})(window.TMG = window.TMG || {});

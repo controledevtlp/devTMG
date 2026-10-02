@@ -18,7 +18,7 @@
  * Os dados ficam guardados no próprio navegador (localStorage), então
  * sobrevivem a um F5. Use a página "Importar dados" para gerenciar.
  * ===================================================================== */
-(function (TRJ) {
+(function (TMG) {
   var F = {};
   var monitor = { timer: null, onUpdate: null, interval: 45000, lastSignature: null, busy: false };
 
@@ -147,11 +147,11 @@
   // ------------------------------------------------------------------
   // 4) Persistência (localStorage) + memória
   // ------------------------------------------------------------------
-  var LS_TASKS = 'trj_rawTasks', LS_INC = 'trj_rawInc', LS_META = 'trj_filesMeta';
-  var LS_TASKS_AG = 'trj_rawTasksAg';   // agendada (por data)
-  var LS_TASKS_NA = 'trj_rawTasksNa';   // não-agendada
-  var LS_META_AG  = 'trj_metaAg';       // metadados do slot agendada
-  var LS_META_NA  = 'trj_metaNa';       // metadados do slot não-agendada
+  var LS_TASKS = 'tmg_rawTasks', LS_INC = 'tmg_rawInc', LS_META = 'tmg_filesMeta';
+  var LS_TASKS_AG = 'tmg_rawTasksAg';   // agendada (por data)
+  var LS_TASKS_NA = 'tmg_rawTasksNa';   // não-agendada
+  var LS_META_AG  = 'tmg_metaAg';       // metadados do slot agendada
+  var LS_META_NA  = 'tmg_metaNa';       // metadados do slot não-agendada
   var mem = { tasks: [], tasksAg: [], tasksNa: [], inc: [], meta: {}, metaAg: null, metaNa: null };
   (function loadLS() {
     try { mem.tasks = JSON.parse(localStorage.getItem(LS_TASKS) || '[]') || []; } catch (e) { mem.tasks = []; }
@@ -227,7 +227,7 @@
   // ------------------------------------------------------------------
   // 5) IndexedDB — guarda o "handle" da pasta de Downloads
   // ------------------------------------------------------------------
-  var IDB_NAME = 'trj-files', IDB_STORE = 'handles', IDB_KEY = 'downloadsDir';
+  var IDB_NAME = 'tmg-files', IDB_STORE = 'handles', IDB_KEY = 'downloadsDir';
   function idbOpen() {
     return new Promise(function (resolve, reject) {
       if (!window.indexedDB) { reject(new Error('IndexedDB indisponível.')); return; }
@@ -303,7 +303,7 @@
     // 'readwrite' (não só 'read'): depois de cada leitura, os arquivos lidos
     // (agendada + não-agendada) são movidos para a subpasta "Importados",
     // pra não embolar com os próximos downloads que caírem na pasta.
-    var handle = await window.showDirectoryPicker({ id: 'trj-downloads', mode: 'readwrite', startIn: 'downloads' });
+    var handle = await window.showDirectoryPicker({ id: 'tmg-downloads', mode: 'readwrite', startIn: 'downloads' });
     await idbSet(IDB_KEY, handle);
     return handle.name;
   };
@@ -514,5 +514,5 @@
     return { total: parsed.length, amostra: parsed.slice(0, 5) };
   };
 
-  TRJ.files = F;
-})(window.TRJ = window.TRJ || {});
+  TMG.files = F;
+})(window.TMG = window.TMG || {});

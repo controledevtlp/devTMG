@@ -11,11 +11,11 @@
  * As opções dos selects D, E, F são carregadas via getValidCadOptions
  * (action do Apps Script que lê os valores únicos das colunas reais).
  * ===================================================================== */
-(function (TRJ) {
-  TRJ.pages = TRJ.pages || {};
-  var U = TRJ.ui;
+(function (TMG) {
+  TMG.pages = TMG.pages || {};
+  var U = TMG.ui;
 
-  var LS_SITES = 'trj_sites';
+  var LS_SITES = 'tmg_sites';
 
   // Cache de opções dinâmicas — carregado uma vez por sessão de navegação.
   // Estrutura: { headers: {D,E,F}, options: {D:[...], E:[...], F:[...]} }
@@ -30,7 +30,7 @@
   async function carregarOpcoes() {
     if (_cadOptions) return _cadOptions;
     try {
-      var res = await TRJ.api.getValidCadOptions();
+      var res = await TMG.api.getValidCadOptions();
       _cadOptions = res || { headers: { D: 'Coluna D', E: 'Coluna E', F: 'Coluna F' }, options: { D: [], E: [], F: [] } };
     } catch (e) {
       _cadOptions = { headers: { D: 'Coluna D', E: 'Coluna E', F: 'Coluna F' }, options: { D: [], E: [], F: [] } };
@@ -43,7 +43,7 @@
     var opts = [U.h('option', { value: '', text: '— em branco —' })].concat(
       (valores || []).map(function (v) { return U.h('option', { value: v, text: v }); })
     );
-    return U.h('select', { id: id, class: cls || 'trj-select w-full' }, opts);
+    return U.h('select', { id: id, class: cls || 'tmg-select w-full' }, opts);
   }
 
   // ---- Varredura de sites sem cadastro (regiao = OTHERS) ----
@@ -57,7 +57,7 @@
     }
     ((data && data.tasksEnriched) || []).forEach(function (t) {
       if ((t.regiao || 'OTHERS') !== 'OTHERS') return;
-      if (!TRJ.domain.isTicketCorretiva(t.tipoAtividade)) return;
+      if (!TMG.domain.isTicketCorretiva(t.tipoAtividade)) return;
       add(t.enderecoId, t.siteId, t.cidade, 'Tarefa');
     });
     ((data && data.incidentsEnriched) || []).forEach(function (i) {
@@ -74,19 +74,19 @@
     var headers = opts.headers || {};
     var options = opts.options || {};
 
-    var card = U.h('div', { class: 'trj-card p-5 mb-5' });
+    var card = U.h('div', { class: 'tmg-card p-5 mb-5' });
     card.appendChild(U.h('h3', { class: 'text-base font-bold mb-1', text: '🔍 Sites sem cadastro (classificados como "Outros")' }));
-    card.appendChild(U.h('p', { class: 'text-xs mb-3', style: { color: 'var(--trj-muted)' }, text: 'Busca tarefas e incidentes ativos sem região cadastrada. Marque os que quer cadastrar, preencha D/E/F e cadastre em lote.' }));
+    card.appendChild(U.h('p', { class: 'text-xs mb-3', style: { color: 'var(--tmg-muted)' }, text: 'Busca tarefas e incidentes ativos sem região cadastrada. Marque os que quer cadastrar, preencha D/E/F e cadastre em lote.' }));
 
     // Selects D, E, F compartilhados para o cadastro em lote
-    var selD = selectDinamico('scan-sel-d', options.D, 'trj-select');
-    var selE = selectDinamico('scan-sel-e', options.E, 'trj-select');
-    var selF = selectDinamico('scan-sel-f', options.F, 'trj-select');
+    var selD = selectDinamico('scan-sel-d', options.D, 'tmg-select');
+    var selE = selectDinamico('scan-sel-e', options.E, 'tmg-select');
+    var selF = selectDinamico('scan-sel-f', options.F, 'tmg-select');
 
     var resultWrap = U.h('div', { class: 'mt-3' });
-    var statusTxt = U.h('span', { class: 'text-xs', style: { color: 'var(--trj-muted)' } });
+    var statusTxt = U.h('span', { class: 'text-xs', style: { color: 'var(--tmg-muted)' } });
     var btnBuscar = U.h('button', {
-      class: 'trj-btn trj-btn-primary clickable', text: '🔍 Buscar sites sem cadastro',
+      class: 'tmg-btn tmg-btn-primary clickable', text: '🔍 Buscar sites sem cadastro',
       onclick: function () { renderResultado(); }
     });
     card.appendChild(U.h('div', { class: 'flex items-center gap-2 flex-wrap' }, [btnBuscar, statusTxt]));
@@ -100,7 +100,7 @@
       checkboxes = [];
       if (!lista.length) {
         statusTxt.textContent = '';
-        resultWrap.appendChild(U.h('div', { class: 'text-sm py-6 text-center', style: { color: 'var(--trj-green)' }, text: '✓ Nenhum site sem cadastro encontrado — tudo classificado!' }));
+        resultWrap.appendChild(U.h('div', { class: 'text-sm py-6 text-center', style: { color: 'var(--tmg-green)' }, text: '✓ Nenhum site sem cadastro encontrado — tudo classificado!' }));
         return;
       }
       statusTxt.textContent = lista.length + ' site(s) sem cadastro encontrado(s)';
@@ -108,28 +108,28 @@
       // Barra de ferramentas com os selects D/E/F
       var colsDEF = U.h('div', { class: 'flex flex-wrap items-center gap-2 flex-1' }, [
         U.h('div', null, [
-          U.h('div', { class: 'text-xs mb-1', style: { color: 'var(--trj-muted)' }, text: headers.D || 'Coluna D' }),
+          U.h('div', { class: 'text-xs mb-1', style: { color: 'var(--tmg-muted)' }, text: headers.D || 'Coluna D' }),
           selD
         ]),
         U.h('div', null, [
-          U.h('div', { class: 'text-xs mb-1', style: { color: 'var(--trj-muted)' }, text: headers.E || 'Coluna E' }),
+          U.h('div', { class: 'text-xs mb-1', style: { color: 'var(--tmg-muted)' }, text: headers.E || 'Coluna E' }),
           selE
         ]),
         U.h('div', null, [
-          U.h('div', { class: 'text-xs mb-1', style: { color: 'var(--trj-muted)' }, text: headers.F || 'Coluna F' }),
+          U.h('div', { class: 'text-xs mb-1', style: { color: 'var(--tmg-muted)' }, text: headers.F || 'Coluna F' }),
           selF
         ])
       ]);
-      var toolbar = U.h('div', { class: 'flex items-start gap-3 flex-wrap mt-3 mb-3 p-3 trj-card', style: { borderRadius: '10px' } }, [
+      var toolbar = U.h('div', { class: 'flex items-start gap-3 flex-wrap mt-3 mb-3 p-3 tmg-card', style: { borderRadius: '10px' } }, [
         U.h('div', { class: 'flex flex-col gap-2' }, [
-          U.h('button', { class: 'trj-btn trj-btn-ghost clickable', style: { fontSize: '12px' }, text: 'Marcar todos', onclick: function () { checkboxes.forEach(function (c) { c.cb.checked = true; }); atualizarContagem(); } }),
-          U.h('button', { class: 'trj-btn trj-btn-ghost clickable', style: { fontSize: '12px' }, text: 'Desmarcar todos', onclick: function () { checkboxes.forEach(function (c) { c.cb.checked = false; }); atualizarContagem(); } })
+          U.h('button', { class: 'tmg-btn tmg-btn-ghost clickable', style: { fontSize: '12px' }, text: 'Marcar todos', onclick: function () { checkboxes.forEach(function (c) { c.cb.checked = true; }); atualizarContagem(); } }),
+          U.h('button', { class: 'tmg-btn tmg-btn-ghost clickable', style: { fontSize: '12px' }, text: 'Desmarcar todos', onclick: function () { checkboxes.forEach(function (c) { c.cb.checked = false; }); atualizarContagem(); } })
         ]),
         colsDEF
       ]);
       resultWrap.appendChild(toolbar);
 
-      var thSt = { textAlign: 'left', padding: '7px 9px', fontSize: '11px', color: 'var(--trj-muted)', borderBottom: '1px solid var(--trj-border)', textTransform: 'uppercase' };
+      var thSt = { textAlign: 'left', padding: '7px 9px', fontSize: '11px', color: 'var(--tmg-muted)', borderBottom: '1px solid var(--tmg-border)', textTransform: 'uppercase' };
       var tdSt = { padding: '7px 9px', fontSize: '13px', borderBottom: '1px solid rgba(255,255,255,.05)' };
       var head = U.h('tr', null, ['', 'Cidade', 'END_ID', 'Site', 'Origem'].map(function (t) { return U.h('th', { style: thSt, text: t }); }));
       var body = lista.map(function (item) {
@@ -149,7 +149,7 @@
       ]));
 
       var btnCad = U.h('button', {
-        class: 'trj-btn trj-btn-primary clickable', text: 'Cadastrar selecionados (0)',
+        class: 'tmg-btn tmg-btn-primary clickable', text: 'Cadastrar selecionados (0)',
         style: { marginTop: '12px' }, disabled: true,
         onclick: async function () {
           var sel = checkboxes.filter(function (c) { return c.cb.checked; }).map(function (c) { return c.item; });
@@ -159,7 +159,7 @@
           for (var i = 0; i < sel.length; i++) {
             var it = sel[i];
             try {
-              await TRJ.api.saveSite({
+              await TMG.api.saveSite({
                 cidade: it.cidade || '',
                 end_id: it.end_id,
                 site: it.site || '',
@@ -190,17 +190,17 @@
   // bloco label + campo
   function campo(labelTxt, inputEl, full) {
     return U.h('div', { class: full ? 'col-span-2' : '' }, [
-      U.h('label', { class: 'text-xs font-bold block mb-1', style: { color: 'var(--trj-muted)' }, text: labelTxt }),
+      U.h('label', { class: 'text-xs font-bold block mb-1', style: { color: 'var(--tmg-muted)' }, text: labelTxt }),
       inputEl
     ]);
   }
 
-  TRJ.pages.cadastro = async function (container, ctx) {
+  TMG.pages.cadastro = async function (container, ctx) {
     container.appendChild(U.pageHeader('Cadastro de Cidades',
       'Gerencie os sites encontrados sem região no VALID_CAD.'));
 
     // Mostra um spinner enquanto carrega as opções do backend
-    var loadingEl = U.h('div', { class: 'trj-card p-6 mb-5 text-sm', style: { color: 'var(--trj-muted)' }, text: '⏳ Carregando opções do banco de dados...' });
+    var loadingEl = U.h('div', { class: 'tmg-card p-6 mb-5 text-sm', style: { color: 'var(--tmg-muted)' }, text: '⏳ Carregando opções do banco de dados...' });
     container.appendChild(loadingEl);
 
     var opts = await carregarOpcoes();
@@ -212,16 +212,16 @@
     var headers = opts.headers || {};
     var options = opts.options || {};
 
-    var inCidade = U.h('input', { class: 'trj-input w-full', placeholder: 'Ex.: Rio de Janeiro' });
-    var inEndId  = U.h('input', { class: 'trj-input w-full', placeholder: 'Ex.: RJCEN_001' });
-    var inSite   = U.h('input', { class: 'trj-input w-full', placeholder: 'Nome / identificação do site' });
+    var inCidade = U.h('input', { class: 'tmg-input w-full', placeholder: 'Ex.: Rio de Janeiro' });
+    var inEndId  = U.h('input', { class: 'tmg-input w-full', placeholder: 'Ex.: RJCEN_001' });
+    var inSite   = U.h('input', { class: 'tmg-input w-full', placeholder: 'Nome / identificação do site' });
     var selD     = selectDinamico('form-sel-d', options.D);
     var selE     = selectDinamico('form-sel-e', options.E);
     var selF     = selectDinamico('form-sel-f', options.F);
 
-    var msg = U.h('div', { class: 'text-sm mt-1', style: { color: 'var(--trj-muted)', minHeight: '20px' } });
+    var msg = U.h('div', { class: 'text-sm mt-1', style: { color: 'var(--tmg-muted)', minHeight: '20px' } });
 
-    var btnSalvar = U.h('button', { class: 'trj-btn trj-btn-primary clickable', text: 'Salvar',
+    var btnSalvar = U.h('button', { class: 'tmg-btn tmg-btn-primary clickable', text: 'Salvar',
       onclick: async function () {
         var row = {
           cidade: (inCidade.value || '').trim(),
@@ -233,29 +233,29 @@
         };
         if (!row.end_id && !row.site && !row.cidade) {
           msg.textContent = 'Preencha ao menos Cidade, END_ID ou Site.';
-          msg.style.color = 'var(--trj-red, #e74c3c)'; return;
+          msg.style.color = 'var(--tmg-red, #e74c3c)'; return;
         }
         btnSalvar.disabled = true;
         try {
-          await TRJ.api.saveSite(row);
+          await TMG.api.saveSite(row);
           msg.textContent = 'Site salvo com sucesso.';
-          msg.style.color = 'var(--trj-green, #2ecc71)';
+          msg.style.color = 'var(--tmg-green, #2ecc71)';
           U.toast('Site cadastrado.', 'ok');
           inCidade.value = ''; inEndId.value = ''; inSite.value = '';
           selD.selectedIndex = 0; selE.selectedIndex = 0; selF.selectedIndex = 0;
           msg.textContent = '';
         } catch (e) {
           msg.textContent = e && e.message ? e.message : 'Erro ao salvar o site.';
-          msg.style.color = 'var(--trj-red, #e74c3c)';
+          msg.style.color = 'var(--tmg-red, #e74c3c)';
           U.toast('Erro ao salvar o site.', 'err');
         } finally { btnSalvar.disabled = false; }
       }
     });
-    var btnLimpar = U.h('button', { class: 'trj-btn trj-btn-ghost clickable', text: 'Limpar',
+    var btnLimpar = U.h('button', { class: 'tmg-btn tmg-btn-ghost clickable', text: 'Limpar',
       onclick: function () { inCidade.value = ''; inEndId.value = ''; inSite.value = ''; selD.selectedIndex = 0; selE.selectedIndex = 0; selF.selectedIndex = 0; msg.textContent = ''; }
     });
 
-    var form = U.h('div', { class: 'trj-card p-5 mb-5' }, [
+    var form = U.h('div', { class: 'tmg-card p-5 mb-5' }, [
       U.h('h3', { class: 'text-base font-bold mb-3', text: 'Cadastro manual' }),
       U.h('div', { class: 'grid grid-cols-1 md:grid-cols-2 gap-4' }, [
         campo('CIDADE', inCidade),
@@ -270,4 +270,4 @@
     ]);
     container.appendChild(form);
   };
-})(window.TRJ = window.TRJ || {});
+})(window.TMG = window.TMG || {});

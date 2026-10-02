@@ -3,16 +3,16 @@
  * Encerramentos por dia (dentro/fora SLA, CCI vs Campo) + Reincidentes
  * Histórico persistido em localStorage + pasta "Produtividade" da conexão
  * ===================================================================== */
-(function (TRJ) {
-  TRJ.pages = TRJ.pages || {};
-  var U    = TRJ.ui;
-  var D    = TRJ.domain;
-  var C    = TRJ.constants;
-  var Comp = TRJ.compute;
-  var FS   = TRJ.files;
+(function (TMG) {
+  TMG.pages = TMG.pages || {};
+  var U    = TMG.ui;
+  var D    = TMG.domain;
+  var C    = TMG.constants;
+  var Comp = TMG.compute;
+  var FS   = TMG.files;
   var h    = U.h;
 
-  var LS_KEY = 'trj_prod_hist_v1'; // localStorage key para histórico diário
+  var LS_KEY = 'tmg_prod_hist_v1'; // localStorage key para histórico diário
   var _charts = [];
   var _state  = { periodo: 30, regiao: 'TODAS', prioridade: 'TODAS' };
 
@@ -717,14 +717,14 @@
     var content = h('div', { style: { maxHeight: '65vh', overflowY: 'auto' } });
     items.forEach(function (it) {
       content.appendChild(h('div', {
-        class: 'trj-card p-3 mb-2',
+        class: 'tmg-card p-3 mb-2',
         style: { borderLeft: '3px solid #ff8c00' }
       }, [
         h('div', { class: 'flex items-center gap-3 mb-1' }, [
           h('span', { class: 'font-bold text-sm', text: 'END_ID: ' + it.eid }),
-          it.task.prioridade ? h('span', { class: 'trj-badge', style: { background: 'rgba(231,76,60,.18)', color: '#e74c3c', fontSize: '11px' }, text: it.task.prioridade }) : null
+          it.task.prioridade ? h('span', { class: 'tmg-badge', style: { background: 'rgba(231,76,60,.18)', color: '#e74c3c', fontSize: '11px' }, text: it.task.prioridade }) : null
         ]),
-        h('div', { style: { fontSize: '12px', color: 'var(--trj-muted)', lineHeight: '1.7' } }, [
+        h('div', { style: { fontSize: '12px', color: 'var(--tmg-muted)', lineHeight: '1.7' } }, [
           h('div', { text: 'Encerrado: ' + fmtDia(it.prevTask ? toIsoDay(it.prevTask.fimCalc) : '?') + '  (OS: ' + (it.prevTask && it.prevTask.osNumero || '—') + ')' }),
           h('div', { text: 'Reincidência: ' + fmtDia(toIsoDay(it.task.fimCalc)) + '  (OS: ' + (it.task.osNumero || '—') + ')  — gap: ' + it.gap + ' dia(s)' })
         ])
@@ -781,13 +781,13 @@
     saveHist(merged);
 
     // Tentar sincronizar com o GAS se disponível
-    if (TRJ.api && TRJ.api.saveProdutividadeHist) {
+    if (TMG.api && TMG.api.saveProdutividadeHist) {
       try {
         log('Sincronizando com o banco de dados...');
         var gasRows = Object.keys(hist).map(function (d) {
           return Object.assign({ data: d }, hist[d]);
         });
-        await TRJ.api.saveProdutividadeHist(gasRows);
+        await TMG.api.saveProdutividadeHist(gasRows);
       } catch (e) { /* GAS indisponível: dados ficam no localStorage */ }
     }
 
@@ -795,15 +795,15 @@
   }
 
   // ── Render ────────────────────────────────────────────────────────
-  TRJ.pages.produtividade = function (container, ctx) {
+  TMG.pages.produtividade = function (container, ctx) {
     var data = ctx && ctx.data;
     destroyLocalCharts();
 
     if (!data || !(data.tasksEnriched || []).length) {
-      container.appendChild(h('div', { class: 'trj-card p-8 text-center' }, [
+      container.appendChild(h('div', { class: 'tmg-card p-8 text-center' }, [
         h('div', { style: { fontSize: '2.4rem', marginBottom: '12px' }, text: '📭' }),
         h('div', { class: 'font-bold mb-2 text-base', text: 'Nenhum dado carregado' }),
-        h('div', { style: { color: 'var(--trj-muted)', fontSize: '13px' },
+        h('div', { style: { color: 'var(--tmg-muted)', fontSize: '13px' },
           text: 'Importe a planilha de tarefas pela aba "Importar dados" para visualizar a produtividade.' })
       ]));
       return;
@@ -814,7 +814,7 @@
     // Cabeçalho
     container.appendChild(U.pageHeader
       ? U.pageHeader('Produtividade Operacional', 'Encerramentos e reincidências por período')
-      : h('div', { class: 'mb-4' }, [h('h1', { class: 'trj-heading text-xl font-bold', text: 'Produtividade Operacional' })])
+      : h('div', { class: 'mb-4' }, [h('h1', { class: 'tmg-heading text-xl font-bold', text: 'Produtividade Operacional' })])
     );
 
     var areaEl = h('div', {});
@@ -841,7 +841,7 @@
       var periodos = [{ l: '7d', v: 7 }, { l: '15d', v: 15 }, { l: '30d', v: 30 }, { l: 'Todos', v: 0 }];
       var btnsPeriodo = periodos.map(function (p) {
         return h('button', {
-          class: 'trj-btn ' + (_state.periodo === p.v ? 'trj-btn-primary' : 'trj-btn-ghost'),
+          class: 'tmg-btn ' + (_state.periodo === p.v ? 'tmg-btn-primary' : 'tmg-btn-ghost'),
           style: { fontSize: '12px', padding: '4px 12px' },
           text: p.l,
           onclick: function () { _state.periodo = p.v; render(); }
@@ -850,15 +850,15 @@
 
       // Botão processar histórico
       var btnProcessar = h('button', {
-        class: 'trj-btn trj-btn-ghost',
+        class: 'tmg-btn tmg-btn-ghost',
         style: { fontSize: '12px', padding: '4px 14px', color: '#ff8c00', borderColor: 'rgba(255,140,0,0.5)' },
         text: hasHist ? '🔄 Reprocessar Histórico' : '📁 Processar Histórico',
         onclick: function () { abrirModalProcessar(ctx, render); }
       });
 
       var btnLimpar = hasHist ? h('button', {
-        class: 'trj-btn trj-btn-ghost',
-        style: { fontSize: '11px', padding: '3px 10px', color: 'var(--trj-muted)' },
+        class: 'tmg-btn tmg-btn-ghost',
+        style: { fontSize: '11px', padding: '3px 10px', color: 'var(--tmg-muted)' },
         text: '🗑 Limpar Histórico',
         onclick: function () { clearHist(); render(); }
       }) : null;
@@ -868,7 +868,7 @@
       var regioes = ['TODAS'].concat(C.REGIOES || []);
       var btnsRegiao = regioes.map(function (r) {
         return h('button', {
-          class: 'trj-btn ' + (_state.regiao === r ? 'trj-btn-primary' : 'trj-btn-ghost'),
+          class: 'tmg-btn ' + (_state.regiao === r ? 'tmg-btn-primary' : 'tmg-btn-ghost'),
           style: { fontSize: '11px', padding: '3px 10px' },
           text: r === 'TODAS' ? 'Todas' : r,
           onclick: function () { _state.regiao = r; render(); }
@@ -878,7 +878,7 @@
       var prios = ['TODAS', 'P1', 'P2', 'P3', 'P4', 'P5', 'PREDITIVA'];
       var btnsPrio = prios.map(function (p) {
         return h('button', {
-          class: 'trj-btn ' + (_state.prioridade === p ? 'trj-btn-primary' : 'trj-btn-ghost'),
+          class: 'tmg-btn ' + (_state.prioridade === p ? 'tmg-btn-primary' : 'tmg-btn-ghost'),
           style: { fontSize: '11px', padding: '3px 10px' },
           text: p === 'TODAS' ? 'Todas' : p,
           onclick: function () { _state.prioridade = p; render(); }
@@ -886,21 +886,21 @@
       });
 
       var row1Items = [
-        h('span', { style: { color: 'var(--trj-muted)', fontSize: '12px', fontWeight: '600' }, text: 'PERÍODO:' }),
+        h('span', { style: { color: 'var(--tmg-muted)', fontSize: '12px', fontWeight: '600' }, text: 'PERÍODO:' }),
         h('div', { class: 'flex gap-2' }, btnsPeriodo),
         sep(),
         btnProcessar,
         btnLimpar
       ].filter(Boolean);
       var row2Items = [
-        h('span', { style: { color: 'var(--trj-muted)', fontSize: '12px', fontWeight: '600' }, text: 'REGIÃO:' }),
+        h('span', { style: { color: 'var(--tmg-muted)', fontSize: '12px', fontWeight: '600' }, text: 'REGIÃO:' }),
         h('div', { class: 'flex gap-2 flex-wrap' }, btnsRegiao),
         sep(),
-        h('span', { style: { color: 'var(--trj-muted)', fontSize: '12px', fontWeight: '600' }, text: 'PRIORIDADE:' }),
+        h('span', { style: { color: 'var(--tmg-muted)', fontSize: '12px', fontWeight: '600' }, text: 'PRIORIDADE:' }),
         h('div', { class: 'flex gap-2 flex-wrap' }, btnsPrio)
       ];
       areaEl.appendChild(h('div', {
-        class: 'trj-card p-3 mb-5',
+        class: 'tmg-card p-3 mb-5',
         style: { borderColor: 'rgba(255,140,0,0.2)' }
       }, [
         h('div', { class: 'flex items-center gap-3 flex-wrap mb-2' }, row1Items),
@@ -1067,25 +1067,25 @@
     ]));
 
     panel.appendChild(h('div', {
-      class: 'trj-card p-6 text-center',
+      class: 'tmg-card p-6 text-center',
       style: { borderColor: 'rgba(255,140,0,0.3)', borderStyle: 'dashed' }
     }, [
       h('div', { style: { fontSize: '2.5rem', marginBottom: '12px' }, text: '📂' }),
       h('div', { class: 'font-bold text-base mb-2', text: 'Sem histórico de produtividade' }),
-      h('div', { style: { color: 'var(--trj-muted)', fontSize: '13px', maxWidth: '480px', margin: '0 auto 20px' },
-        text: 'Para gerar os gráficos históricos, coloque os arquivos "Atividades-TRJ_FMMT" anteriores ' +
+      h('div', { style: { color: 'var(--tmg-muted)', fontSize: '13px', maxWidth: '480px', margin: '0 auto 20px' },
+        text: 'Para gerar os gráficos históricos, coloque os arquivos "Atividades-TMG_FMMT" anteriores ' +
               'na subpasta "Produtividade" dentro da pasta conectada e clique em processar.' }),
-      h('div', { class: 'trj-card p-3 mb-5 text-left', style: { maxWidth: '420px', margin: '0 auto 20px', fontSize: '12px', color: 'var(--trj-muted)' } }, [
-        h('div', { class: 'font-bold mb-2', style: { color: 'var(--trj-fg)' }, text: '📁 Estrutura esperada:' }),
+      h('div', { class: 'tmg-card p-3 mb-5 text-left', style: { maxWidth: '420px', margin: '0 auto 20px', fontSize: '12px', color: 'var(--tmg-muted)' } }, [
+        h('div', { class: 'font-bold mb-2', style: { color: 'var(--tmg-fg)' }, text: '📁 Estrutura esperada:' }),
         h('div', { text: 'Pasta conectada/' }),
-        h('div', { style: { paddingLeft: '16px' }, text: '├ Atividades-TRJ_FMMT_hoje.xlsx' }),
+        h('div', { style: { paddingLeft: '16px' }, text: '├ Atividades-TMG_FMMT_hoje.xlsx' }),
         h('div', { style: { paddingLeft: '16px' }, text: '└ Produtividade/' }),
-        h('div', { style: { paddingLeft: '32px' }, text: '├ Atividades-TRJ_FMMT_2026-07-01.xlsx' }),
-        h('div', { style: { paddingLeft: '32px' }, text: '├ Atividades-TRJ_FMMT_2026-07-02.xlsx' }),
+        h('div', { style: { paddingLeft: '32px' }, text: '├ Atividades-TMG_FMMT_2026-07-01.xlsx' }),
+        h('div', { style: { paddingLeft: '32px' }, text: '├ Atividades-TMG_FMMT_2026-07-02.xlsx' }),
         h('div', { style: { paddingLeft: '32px' }, text: '└ ...' })
       ]),
       h('button', {
-        class: 'trj-btn trj-btn-primary',
+        class: 'tmg-btn tmg-btn-primary',
         style: { padding: '10px 28px', fontSize: '14px' },
         text: '📁 Processar Histórico da pasta "Produtividade"',
         onclick: function () { abrirModalProcessar(ctx, onDone); }
@@ -1096,9 +1096,9 @@
 
   // ── Modal: processamento de histórico ──────────────────────────────
   function abrirModalProcessar(ctx, onDone) {
-    var progressEl = h('div', { style: { color: 'var(--trj-muted)', fontSize: '13px', minHeight: '24px' }, text: 'Aguardando...' });
+    var progressEl = h('div', { style: { color: 'var(--tmg-muted)', fontSize: '13px', minHeight: '24px' }, text: 'Aguardando...' });
     var btnStart = h('button', {
-      class: 'trj-btn trj-btn-primary',
+      class: 'tmg-btn tmg-btn-primary',
       style: { padding: '8px 24px' },
       text: 'Iniciar Processamento'
     });
@@ -1106,7 +1106,7 @@
     var okEl    = h('div', { style: { color: '#2ecc71', fontSize: '13px', marginTop: '8px' } });
 
     var content = h('div', {}, [
-      h('div', { style: { color: 'var(--trj-muted)', fontSize: '13px', marginBottom: '16px' },
+      h('div', { style: { color: 'var(--tmg-muted)', fontSize: '13px', marginBottom: '16px' },
         text: 'Todos os arquivos .xlsx dentro da subpasta "Produtividade" da pasta conectada ' +
               'serão lidos, processados e as métricas salvas para análise histórica.' }),
       progressEl, errEl, okEl,
@@ -1130,7 +1130,7 @@
         btnStart.disabled = false;
         btnStart.textContent = 'Fechar e ver gráficos';
         btnStart.onclick = function () {
-          var ov = document.querySelector('.trj-modal-overlay');
+          var ov = document.querySelector('.tmg-modal-overlay');
           if (ov) ov.click();
         };
       } catch (e) {
@@ -1150,4 +1150,4 @@
     ]);
   }
 
-})(window.TRJ = window.TRJ || {});
+})(window.TMG = window.TMG || {});

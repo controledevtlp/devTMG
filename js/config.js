@@ -11,8 +11,8 @@
  *   4. Implantar > Novo implante > App da Web > acesso "Qualquer pessoa"
  *   5. Copie a URL gerada (termina em /exec) e cole em APPS_SCRIPT_URL abaixo
  * ===================================================================== */
-(function (TRJ) {
-  TRJ.config = {
+(function (TMG) {
+  TMG.config = {
     // >>>>>>>>>>>>>>  COLE A URL DO SEU APPS SCRIPT AQUI (termina em /exec)  <<<<<<<<<<<<<<
     APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbw9Hvxe0_0DMYvbfrgGu81_oGZCTgsNLSwkeXtZzbTE8yJHJqr8wn2pLSem3AO3G57ZUw/exec",
 
@@ -26,4 +26,4 @@
     // Intervalo de auto-atualização do dashboard (segundos). 0 = desligado.
     AUTO_REFRESH_SEG: 0
   };
-})(window.TRJ = window.TRJ || {});
+})(window.TMG = window.TMG || {});

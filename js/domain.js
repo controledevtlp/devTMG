@@ -1,6 +1,6 @@
-/* Logica de dominio TMG (adaptado do controle-operacional TRJ) */
-(function (TRJ) {
-  var C = TRJ.constants;
+/* Logica de dominio TMG (adaptado do controle-operacional TMG) */
+(function (TMG) {
+  var C = TMG.constants;
   var D = {};
 
   function up(s) { return (s == null ? '' : s).toString().toUpperCase().trim(); }
@@ -1416,5 +1416,5 @@
   D.separarTicketsManuais = separarTicketsManuais;
   D.agruparCausa = agruparCausa;
 
-  TRJ.domain = D;
-})(window.TRJ = window.TRJ || {});
+  TMG.domain = D;
+})(window.TMG = window.TMG || {});
