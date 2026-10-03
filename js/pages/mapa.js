@@ -730,7 +730,8 @@
       if (!layers.flag1) { U.toast && U.toast('Mapa não carregado', 'warn'); return; }
       var marcadores = Object.values(layers.flag1._layers || {}).filter(function(m) { return m.getOpacity ? m.getOpacity() > 0.5 : true; });
       if (!marcadores.length) { U.toast && U.toast('Nenhum site visível para gerar relatório', 'warn'); return; }
-      // Deduplicar por END_ID para o relatório (preferir SR- > 5G- > outros)
+
+      // Deduplicar por END_ID (preferir SR- > 5G- > outros)
       var _rp = function(n) { return (n||'').indexOf('SR-')===0 ? 2 : (n||'').indexOf('5G-')===0 ? 1 : 0; };
       var _dedupMap = {};
       marcadores.forEach(function(m) {
@@ -748,33 +749,104 @@
         if (!porRegiao[r]) porRegiao[r] = [];
         porRegiao[r].push(d);
       });
-      var linhas = ['🗺️ SITES FORA — ' + new Date().toLocaleString('pt-BR'), ''];
       var regioesList = _filtros.regiao ? [_filtros.regiao] : Object.keys(porRegiao).sort();
-      regioesList.forEach(function(r) {
-        var sites = porRegiao[r];
-        if (!sites || !sites.length) return;
-        var label = (C && C.REGIAO_LABELS && C.REGIAO_LABELS[r]) || r;
-        linhas.push('━━━ ' + label + ' (' + sites.length + ') ━━━');
-        var sorted = _nnSort(sites);
-        var semCoord = sites.filter(function(s){ return !s.lat || !s.lon; });
-        sorted.forEach(function(s, i) {
-          var info = (i + 1) + '. ' + (s.site || s.eid);
-          if (s.eid && s.eid !== s.site) info += ' (' + s.eid + ')';
-          if (s.cidade) info += ' — ' + s.cidade;
-          info += s.tsk ? '  🔵 COM TSK' : '  🔴 SEM TSK';
-          linhas.push(info);
-          if (i < sorted.length - 1 && sorted[i+1] && sorted[i+1].lat && s.lat) {
-            var dist = haversineKm(s.lat, s.lon, sorted[i+1].lat, sorted[i+1].lon);
-            linhas.push('   ↓ ~' + dist.toFixed(0) + ' km' + (dist > 80 ? '  ⚠️ longa distância' : ''));
+
+      var sitesComCoord = sitesDedup.filter(function(d) { return d.lat && d.lon; });
+
+      if (btnRelatorio) { btnRelatorio.textContent = '⏳ Calculando...'; btnRelatorio.disabled = true; }
+      function _resetBtn() {
+        if (btnRelatorio) { btnRelatorio.textContent = '📋 Copiar relatório'; btnRelatorio.disabled = false; }
+      }
+
+      function _emitir(distMatrix, durMatrix) {
+        var _idxMap = {};
+        sitesComCoord.forEach(function(s, i) { if (s.eid) _idxMap[s.eid] = i; });
+
+        function _distEntre(a, b) {
+          if (distMatrix && a.eid && b.eid) {
+            var ia = _idxMap[a.eid], ib = _idxMap[b.eid];
+            if (ia !== undefined && ib !== undefined && distMatrix[ia] && distMatrix[ia][ib] != null)
+              return distMatrix[ia][ib]; // metros
           }
-        });
-        if (semCoord.length) linhas.push('   (sem coord: ' + semCoord.map(function(s){ return s.site||s.eid; }).join(', ') + ')');
+          return haversineKm(a.lat, a.lon, b.lat, b.lon) * 1000;
+        }
+
+        function _durEntre(a, b) {
+          if (!durMatrix || !a.eid || !b.eid) return null;
+          var ia = _idxMap[a.eid], ib = _idxMap[b.eid];
+          if (ia !== undefined && ib !== undefined && durMatrix[ia] && durMatrix[ia][ib] != null)
+            return durMatrix[ia][ib]; // segundos
+          return null;
+        }
+
+        function _nnSortM(sites) {
+          if (sites.length <= 1) return sites.slice();
+          var rem = sites.filter(function(s){ return s.lat && s.lon; });
+          if (!rem.length) return sites.slice();
+          var sorted = [rem.splice(0, 1)[0]];
+          while (rem.length) {
+            var last = sorted[sorted.length - 1];
+            var minD = Infinity, minI = 0;
+            rem.forEach(function(s, i) {
+              var d = _distEntre(last, s);
+              if (d < minD) { minD = d; minI = i; }
+            });
+            sorted.push(rem.splice(minI, 1)[0]);
+          }
+          return sorted;
+        }
+
+        var usouOSRM = !!distMatrix;
+        var linhas = ['🗺️ SITES FORA — ' + new Date().toLocaleString('pt-BR')];
+        if (usouOSRM) linhas.push('📍 Distâncias por estrada via OSRM (sem tráfego em tempo real)');
         linhas.push('');
-      });
-      var texto = linhas.join('\n');
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(texto).then(function() { U.toast && U.toast('Relatório copiado!', 'ok'); }).catch(function() { _fallbackCopy(texto); });
-      } else { _fallbackCopy(texto); }
+
+        regioesList.forEach(function(r) {
+          var sites = porRegiao[r];
+          if (!sites || !sites.length) return;
+          var label = (C && C.REGIAO_LABELS && C.REGIAO_LABELS[r]) || r;
+          linhas.push('━━━ ' + label + ' (' + sites.length + ') ━━━');
+          var sorted = _nnSortM(sites);
+          var semCoord = sites.filter(function(s){ return !s.lat || !s.lon; });
+          sorted.forEach(function(s, i) {
+            var info = (i + 1) + '. ' + (s.site || s.eid);
+            if (s.eid && s.eid !== s.site) info += ' (' + s.eid + ')';
+            if (s.cidade) info += ' — ' + s.cidade;
+            info += s.tsk ? '  🔵 COM TSK' : '  🔴 SEM TSK';
+            linhas.push(info);
+            if (i < sorted.length - 1 && sorted[i+1] && sorted[i+1].lat && s.lat) {
+              var distM = _distEntre(s, sorted[i+1]);
+              var distKm = distM / 1000;
+              var trecho = '   ↓ ~' + distKm.toFixed(1) + ' km';
+              if (usouOSRM) {
+                var dur = _durEntre(s, sorted[i+1]);
+                if (dur != null) trecho += ' · ~' + Math.round(dur / 60) + ' min';
+                trecho += ' (por estrada)';
+              }
+              if (distKm > 80) trecho += '  ⚠️ longa distância';
+              linhas.push(trecho);
+            }
+          });
+          if (semCoord.length) linhas.push('   (sem coord: ' + semCoord.map(function(s){ return s.site||s.eid; }).join(', ') + ')');
+          linhas.push('');
+        });
+
+        var texto = linhas.join('\n');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(texto).then(function() { U.toast && U.toast('Relatório copiado!', 'ok'); }).catch(function() { _fallbackCopy(texto); });
+        } else { _fallbackCopy(texto); }
+        _resetBtn();
+      }
+
+      if (sitesComCoord.length >= 2) {
+        var coords = sitesComCoord.map(function(s) { return s.lon + ',' + s.lat; }).join(';');
+        fetch('https://router.project-osrm.org/table/v1/driving/' + coords + '?annotations=distance,duration')
+          .then(function(r) { return r.json(); })
+          .then(function(data) { _emitir(data.distances || null, data.durations || null); })
+          .catch(function() { _emitir(null, null); });
+      } else {
+        _emitir(null, null);
+      }
     }
 
     function _fallbackCopy(txt) {
@@ -790,19 +862,19 @@
       var q      = (siteInput.value || '').trim().toLowerCase();
       var qCity  = (cityInput.value || '').trim().toLowerCase();
       var matched = [];
-      var anyFilter = q || qCity || _filtros.regiao || _filtros.soTSK || !_filtros.legSemTSK || !_filtros.legComTSK || !_filtros.legRecente;
+      // cidade não filtra marcadores — apenas zoom + contorno municipal (ver _atualizarDestaqueCidade)
+      var anyFilter = q || _filtros.regiao || _filtros.soTSK || !_filtros.legSemTSK || !_filtros.legComTSK || !_filtros.legRecente;
 
       Object.values(layers.flag1._layers || {}).forEach(function(m) {
         var d = m._d || {};
-        var okSite   = !q     || (d.eid||'').toLowerCase().indexOf(q)>=0 || (d.site||'').toLowerCase().indexOf(q)>=0;
-        var okCidade = !qCity || (d.cidade||'').toLowerCase().indexOf(qCity)>=0;
+        var okSite   = !q || (d.eid||'').toLowerCase().indexOf(q)>=0 || (d.site||'').toLowerCase().indexOf(q)>=0;
         var okRegiao = !_filtros.regiao || (d.regiao||'OTHERS') === _filtros.regiao;
         var okTipo = true;
         if (d.cor === '#e74c3c' && !_filtros.legSemTSK) okTipo = false;
         if (d.cor === '#3498db' && !_filtros.legComTSK) okTipo = false;
         if (d.cor === '#f0b429' && !_filtros.legRecente) okTipo = false;
         if (_filtros.soTSK && !d.tsk) okTipo = false;
-        var visible = okSite && okCidade && okRegiao && okTipo;
+        var visible = okSite && okRegiao && okTipo;
         m.setOpacity(visible ? 1 : 0.07);
         if (visible) matched.push(m);
       });
