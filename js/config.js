@@ -14,7 +14,7 @@
 (function (TMG) {
   TMG.config = {
     // >>>>>>>>>>>>>>  COLE A URL DO SEU APPS SCRIPT AQUI (termina em /exec)  <<<<<<<<<<<<<<
-    APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbw9Hvxe0_0DMYvbfrgGu81_oGZCTgsNLSwkeXtZzbTE8yJHJqr8wn2pLSem3AO3G57ZUw/exec",
+    APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbxXOiHOudW8eZDNlz_YLF64FlzXZU4IJG7J3uwOLZ9pyFjUJuQDkArc-NCCU9AkpDVOLQ/exec",
 
     // Referência da planilha (apenas documentação — não é usada pelo sistema)
     SPREADSHEET_URL: "https://docs.google.com/spreadsheets/d/1blACAJyVPhrm47iWswLfNi_QexxrgZbW9RaICvYcWxc/edit",
