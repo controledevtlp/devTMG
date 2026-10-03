@@ -215,6 +215,16 @@
   App.invalidateValidMap = function () {
     try { localStorage.removeItem(LS_VMAP); } catch (e) {}
   };
+  App.extendValidMap = function (extraMap) {
+    if (!extraMap || !Object.keys(extraMap).length) return;
+    var merged = Object.assign({}, (App.data && App.data.validMap) || {}, extraMap);
+    _vmapSave(merged);
+    if (App.data) {
+      App.data.validMap = merged;
+      App.data.validMapSize = Object.keys(merged).length;
+      App.data.validMapFromCache = false;
+    }
+  };
   App.refreshValidMap = async function () {
     App.invalidateValidMap();
     try {
