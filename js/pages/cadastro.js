@@ -195,6 +195,87 @@
     ]);
   }
 
+  // ---- Card: pesquisa por END_ID para edição em lote ----
+  function buildEditCard(args) {
+    var ctx = args.ctx, opts = args.opts;
+    var headers = (opts && opts.headers) || {};
+    var options = (opts && opts.options) || {};
+    var app = ctx.app;
+
+    var card = U.h('div', { class: 'tmg-card p-5 mb-5' });
+    card.appendChild(U.h('h3', { class: 'text-base font-bold mb-1', text: '✏️ Editar por END_ID' }));
+    card.appendChild(U.h('p', { class: 'text-xs mb-3', style: { color: 'var(--tmg-muted)' }, text: 'Busque um END_ID para editar todas as linhas correspondentes na planilha de uma vez.' }));
+
+    var inBusca = U.h('input', { class: 'tmg-input', style: { width: '220px' }, placeholder: 'Ex.: MGBHO_001' });
+    var btnBuscar = U.h('button', { class: 'tmg-btn tmg-btn-primary clickable', text: '🔍 Buscar' });
+    var statusMsg = U.h('span', { class: 'text-xs', style: { color: 'var(--tmg-muted)' } });
+    card.appendChild(U.h('div', { class: 'flex items-center gap-2 flex-wrap mb-3' }, [inBusca, btnBuscar, statusMsg]));
+
+    var formWrap = U.h('div');
+    card.appendChild(formWrap);
+
+    var endIdBuscado = '';
+
+    async function executarBusca() {
+      var key = (inBusca.value || '').trim();
+      if (!key) { statusMsg.textContent = 'Digite um END_ID.'; statusMsg.style.color = 'var(--tmg-red, #e74c3c)'; return; }
+      statusMsg.textContent = 'Buscando...'; statusMsg.style.color = 'var(--tmg-muted)';
+      formWrap.innerHTML = '';
+      try {
+        var res = await TMG.api.searchSite(key);
+        var rows = (res && res.rows) || [];
+        if (!rows.length) { statusMsg.textContent = 'Nenhum site encontrado com esse END_ID.'; statusMsg.style.color = 'var(--tmg-red, #e74c3c)'; return; }
+        endIdBuscado = key;
+        statusMsg.textContent = rows.length + ' linha(s) encontrada(s) — edite os campos e salve.';
+        statusMsg.style.color = 'var(--tmg-green, #2ecc71)';
+        var first = rows[0];
+        var inCid  = U.h('input', { class: 'tmg-input w-full', value: first.cidade || '' });
+        var inEndD = U.h('input', { class: 'tmg-input w-full', value: first.end_id || key, disabled: true });
+        var inSite = U.h('input', { class: 'tmg-input w-full', value: first.site || '' });
+        var selD   = selectDinamico('edit-sel-d', options.D);
+        var selE   = selectDinamico('edit-sel-e', options.E);
+        var selF   = selectDinamico('edit-sel-f', options.F);
+        if (first.colD) selD.value = first.colD;
+        if (first.colE) selE.value = first.colE;
+        if (first.colF) selF.value = first.colF;
+        var msgEdit = U.h('div', { class: 'text-sm mt-1', style: { minHeight: '20px' } });
+        var btnSalvar = U.h('button', { class: 'tmg-btn tmg-btn-primary clickable', text: 'Salvar alterações',
+          onclick: async function () {
+            var row = { cidade: (inCid.value || '').trim(), site: (inSite.value || '').trim(), colD: selD.value, colE: selE.value, colF: selF.value };
+            btnSalvar.disabled = true;
+            try {
+              var upRes = await TMG.api.updateSite(endIdBuscado, row);
+              msgEdit.textContent = (upRes.updated || rows.length) + ' linha(s) atualizada(s).';
+              msgEdit.style.color = 'var(--tmg-green, #2ecc71)';
+              U.toast('Site(s) atualizado(s) com sucesso.', 'ok');
+            } catch (e) {
+              msgEdit.textContent = e.message || 'Erro ao salvar.';
+              msgEdit.style.color = 'var(--tmg-red, #e74c3c)';
+            } finally { btnSalvar.disabled = false; }
+          }
+        });
+        var btnCancelar = U.h('button', { class: 'tmg-btn tmg-btn-ghost clickable', text: 'Cancelar',
+          onclick: function () { formWrap.innerHTML = ''; inBusca.value = ''; statusMsg.textContent = ''; endIdBuscado = ''; }
+        });
+        var grid = U.h('div', { class: 'grid grid-cols-1 md:grid-cols-2 gap-4 mt-2' }, [
+          campo('CIDADE', inCid), campo('END_ID', inEndD),
+          campo('SITE', inSite, true),
+          campo(headers.D || 'Coluna D', selD), campo(headers.E || 'Coluna E', selE), campo(headers.F || 'Coluna F', selF)
+        ]);
+        formWrap.appendChild(grid);
+        formWrap.appendChild(U.h('div', { class: 'flex gap-2 flex-wrap mt-4' }, [btnSalvar, btnCancelar]));
+        formWrap.appendChild(msgEdit);
+      } catch (e) {
+        statusMsg.textContent = e.message || 'Erro ao buscar.';
+        statusMsg.style.color = 'var(--tmg-red, #e74c3c)';
+      }
+    }
+
+    btnBuscar.addEventListener('click', executarBusca);
+    inBusca.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') executarBusca(); });
+    return card;
+  }
+
   TMG.pages.cadastro = async function (container, ctx) {
     container.appendChild(U.pageHeader('Cadastro de Cidades',
       'Gerencie os sites encontrados sem região no VALID_CAD.'));
@@ -207,6 +288,9 @@
     loadingEl.remove();
 
     container.appendChild(buildScanCard(ctx, opts));
+
+    // ---- Card: pesquisa por END_ID para edição ----
+    container.appendChild(buildEditCard({ ctx: ctx, opts: opts }));
 
     // ---- Formulário de cadastro manual ----
     var headers = opts.headers || {};

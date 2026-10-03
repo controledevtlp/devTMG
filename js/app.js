@@ -197,6 +197,48 @@
     setActiveLink();
   }
 
+  // ---------------- CACHE VALID_CAD ----------------
+  var LS_VMAP = 'tmg_validMap_v1';
+  var VMAP_TTL = 30 * 60 * 1000; // 30 minutos
+
+  function _vmapLoad() {
+    try {
+      var c = JSON.parse(localStorage.getItem(LS_VMAP) || 'null');
+      if (!c || !c.map || !c.ts) return null;
+      if (Date.now() - c.ts > VMAP_TTL) return null;
+      return c.map;
+    } catch (e) { return null; }
+  }
+  function _vmapSave(map) {
+    try { localStorage.setItem(LS_VMAP, JSON.stringify({ map: map || {}, ts: Date.now() })); } catch (e) {}
+  }
+  App.invalidateValidMap = function () {
+    try { localStorage.removeItem(LS_VMAP); } catch (e) {}
+  };
+  App.refreshValidMap = async function () {
+    App.invalidateValidMap();
+    try {
+      var rawTasks = (TMG.files && TMG.files.getTasks()) || [];
+      var rawInc   = (TMG.files && TMG.files.getIncidents()) || [];
+      var ids = Comp.collectIds(rawTasks, rawInc);
+      var lk = ids.length ? await TMG.api.lookupCities(ids) : { map: {} };
+      var map = (lk && lk.map) || {};
+      _vmapSave(map);
+      if (App.data) {
+        App.data.validMap = map;
+        App.data.validMapSize = Object.keys(map).length;
+        App.data.validMapFromCache = false;
+        App.data.validMapErr = null;
+        App.data.tasksEnriched = Comp.enrichTasks(rawTasks, map, App.data.prazoMap, new Date());
+        App.data.incidentsEnriched = Comp.enrichIncidents(rawInc, map);
+      }
+      U.toast(Object.keys(map).length + ' sites mapeados (VALID_CAD atualizado).', 'ok');
+      buildShell(); render();
+    } catch (e) {
+      U.toast('Erro ao atualizar mapeamento: ' + (e.message || ''), 'err');
+    }
+  };
+
   // ---------------- DADOS ----------------
   function prazoOverride(config) {
     var o = {};
@@ -204,29 +246,43 @@
     return o;
   }
 
-  App.loadAll = async function () {
+  App.loadAll = async function (forceMapRefresh) {
     U.loading(true);
     try {
-      // Config (prazos de SLA): backend se houver URL, senão localStorage (offline).
       var cfgRes = await TMG.api.getConfig();
       var config = (cfgRes && cfgRes.config) || {};
-      // Tarefas e incidentes vêm dos arquivos lidos no navegador (TMG.files).
       var rawTasks = (TMG.files && TMG.files.getTasks()) || [];
       var rawInc = (TMG.files && TMG.files.getIncidents()) || [];
       var prazoMap = D.montarPrazoMap(prazoOverride(config));
       var ids = Comp.collectIds(rawTasks, rawInc);
       var validMap = {};
+      var validMapFromCache = false;
+      var validMapErr = null;
       if (ids.length) {
-        try { var lk = await TMG.api.lookupCities(ids); validMap = (lk && lk.map) || {}; }
-        catch (e) { validMap = {}; /* sem backend de cidades: segue sem enriquecimento */ }
+        var cached = forceMapRefresh ? null : _vmapLoad();
+        if (cached) {
+          validMap = cached;
+          validMapFromCache = true;
+        } else {
+          try {
+            var lk = await TMG.api.lookupCities(ids);
+            validMap = (lk && lk.map) || {};
+            _vmapSave(validMap);
+          } catch (e) {
+            validMapErr = e.message || 'Erro desconhecido';
+          }
+        }
       }
       var now = new Date();
       App.data = {
         config: config, prazoMap: prazoMap, validMap: validMap,
+        validMapSize: Object.keys(validMap).length,
+        validMapFromCache: validMapFromCache,
+        validMapErr: validMapErr,
         rawTasks: rawTasks, rawInc: rawInc,
         tasksEnriched: Comp.enrichTasks(rawTasks, validMap, prazoMap, now),
         incidentsEnriched: Comp.enrichIncidents(rawInc, validMap),
-        loadedAt: new Date()
+        loadedAt: now
       };
     } finally {
       U.loading(false);
@@ -364,15 +420,31 @@
       mostrarProgresso(2);
       var ids      = Comp.collectIds(rawTasks, rawInc);
       var validMap = {};
+      var validMapFromCache = false;
+      var validMapErr = null;
       if (ids.length) {
-        try { var lk = await TMG.api.lookupCities(ids); validMap = (lk && lk.map) || {}; }
-        catch (e) { validMap = {}; }
+        var cached = _vmapLoad();
+        if (cached) {
+          validMap = cached;
+          validMapFromCache = true;
+        } else {
+          try {
+            var lk = await TMG.api.lookupCities(ids);
+            validMap = (lk && lk.map) || {};
+            _vmapSave(validMap);
+          } catch (e) {
+            validMapErr = e.message || 'Erro desconhecido';
+          }
+        }
       }
 
       mostrarProgresso(3);
       var now = new Date();
       App.data = {
         config: config, prazoMap: prazoMap, validMap: validMap,
+        validMapSize: Object.keys(validMap).length,
+        validMapFromCache: validMapFromCache,
+        validMapErr: validMapErr,
         rawTasks: rawTasks, rawInc: rawInc,
         tasksEnriched:    Comp.enrichTasks(rawTasks, validMap, prazoMap, now),
         incidentsEnriched: Comp.enrichIncidents(rawInc, validMap),
