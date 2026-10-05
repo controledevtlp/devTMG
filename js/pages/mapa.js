@@ -48,9 +48,17 @@
 
   function salvarMapaDados(coordMap, mwData, foData, markers) {
     saveLS(LS_COORDS, coordMap);
-    saveLS(LS_MW, mwData);
-    saveLS(LS_FO, foData);
-    if (markers !== undefined) saveLS(LS_MARKERS, markers);
+    // Cache em memória: garante que dashboard.js acesse os dados mesmo se localStorage falhar
+    TMG._mwDataCache = mwData || [];
+    TMG._foDataCache = foData || [];
+    var mwSave = (mwData||[]).map(function(l){ return { Enlace2:l.Enlace2||'', LAT_A:l.LAT_A, LONG_A:l.LONG_A, LAT_B:l.LAT_B, LONG_B:l.LONG_B, FORNECEDOR:l.FORNECEDOR||'' }; });
+    var foSave = (foData||[]).map(function(h){ return { NEName:h.NEName||'', HUB:h.HUB||'', LAT_A:h.LAT_A, LONG_A:h.LONG_A, FORNECEDOR:h.FORNECEDOR||'' }; });
+    saveLS(LS_MW, mwSave);
+    saveLS(LS_FO, foSave);
+    if (markers !== undefined) {
+      var mSave = markers.map(function(m){ return { NEName:m.NEName||'', Latitude:m.Latitude||m.lat||'', Longitude:m.Longitude||m.lon||'', ENDID:m.ENDID||'', municipio:m.municipio||'', flag:m.flag, tempo:m.tempo||0 }; });
+      saveLS(LS_MARKERS, mSave);
+    }
   }
   TMG.mapaSetDados = salvarMapaDados;
 
@@ -59,15 +67,27 @@
   // Antes só extraía coords de mwData/foData — agora extrai do markerData (fonte principal).
   function parseGenesisParaMapa(htmlText) {
     function cleanJSON(raw) { return raw.replace(/\u00a0/g,'').replace(/\\u00a0/g,''); }
-    function extract(pattern) {
-      var m = htmlText.match(pattern);
-      if (!m) return [];
-      try { return JSON.parse(cleanJSON(m[1])); } catch(e){ return []; }
+    function extractVar(name) {
+      var patterns = [
+        new RegExp(name + '\\s*=\\s*(\\[[\\s\\S]*?\\])\\s*;'),
+        new RegExp(name + '\\s*=\\s*(\\[[\\s\\S]*?\\])\\s*,'),
+        new RegExp(name + '\\s*=\\s*(\\[[\\s\\S]*?\\])\\s*\\n'),
+        new RegExp(name + '\\s*=\\s*(\\[[\\s\\S]*?\\])')
+      ];
+      for (var pi = 0; pi < patterns.length; pi++) {
+        var m = htmlText.match(patterns[pi]);
+        if (m) {
+          try { var r = JSON.parse(cleanJSON(m[1])); if (Array.isArray(r) && r.length) return r; } catch(e){}
+        }
+      }
+      return [];
     }
 
-    var markerData = extract(/markerData\s*=\s*(\[[\s\S]*?\]);/);
-    var mwData     = extract(/mwData\s*=\s*(\[[\s\S]*?\]);/);
-    var foData     = extract(/foData\s*=\s*(\[[\s\S]*?\]);/);
+    var markerData = extractVar('markerData');
+    var mwData     = extractVar('mwData');
+    var foData     = extractVar('foData');
+    console.log('[Mapa TMG] parseGenesis: markerData=' + markerData.length + ' mwData=' + mwData.length + ' foData=' + foData.length,
+                markerData.length ? markerData[0] : '(vazio)');
 
     var coordMap = {};
 
@@ -106,10 +126,45 @@
       }
     });
 
+    // ── Fallback DOM-based ──────────────────────────────────────
+    if (!markerData.length && !mwData.length) {
+      try {
+        var doc2 = new DOMParser().parseFromString(htmlText, 'text/html');
+        var scripts = doc2.querySelectorAll('script');
+        scripts.forEach(function(s) {
+          var src = s.textContent || '';
+          var allArrays = src.match(/\[[\s\S]{20,}\]/g) || [];
+          allArrays.forEach(function(raw) {
+            if (markerData.length) return;
+            try {
+              var arr = JSON.parse(cleanJSON(raw));
+              if (!Array.isArray(arr) || !arr.length) return;
+              var first = arr[0];
+              if (first && (first.NEName || first.neName) && (first.Latitude || first.latitude || first.LAT_A)) {
+                markerData = arr;
+              }
+            } catch(e){}
+          });
+        });
+      } catch(e2) {}
+    }
+
+    var debugVars = [];
+    if (/markerData/.test(htmlText)) debugVars.push('markerData');
+    if (/mwData/.test(htmlText))     debugVars.push('mwData');
+    if (/foData/.test(htmlText))     debugVars.push('foData');
+    var debugInfo = {
+      varsFound: debugVars, markerLen: markerData.length, mwLen: mwData.length, foLen: foData.length,
+      htmlLen: htmlText.length,
+      snippet: htmlText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+    };
+    console.log('[Mapa TMG] parseGenesis:', debugInfo, markerData.length ? markerData[0] : null);
+
     salvarMapaDados(coordMap, mwData, foData, markerData);
     return {
       coordMap: coordMap, mwData: mwData, foData: foData, markerData: markerData,
-      coordCount: Object.keys(coordMap).length, siteCount: markerData.length
+      coordCount: Object.keys(coordMap).length, siteCount: markerData.length,
+      debugInfo: debugInfo
     };
   }
   TMG.mapaParseGenesis = parseGenesisParaMapa;
@@ -124,6 +179,18 @@
     // Dados de mapa: contexto > localStorage > estáticos embutidos > vazio
     var coordMap = ctx.mapaCoordMap || loadLS(LS_COORDS) || TMG.defaultCoordMap || {};
     var mapaMarkers = loadLS(LS_MARKERS) || [];
+
+    // Enriquecer coordMap com coords do snapshot slim (para o dashboard público funcionar com incidentes dinâmicos)
+    if (ctx.mapaMarkers && ctx.mapaMarkers.length) {
+      ctx.mapaMarkers.forEach(function(s) {
+        var eid = s.ENDID || s.endId || '';
+        var lat = parseCoord(s.lat || s.Latitude);
+        var lon = parseCoord(s.lon || s.Longitude);
+        if (eid && !isNaN(lat) && !isNaN(lon) && !coordMap[eid]) {
+          coordMap[eid] = [lat, lon];
+        }
+      });
+    }
 
     // mwData e foData: formato compacto [la,loa,lb,lob,enlace2,forn] → normalizar para objetos
     function _normMw(x) {
@@ -154,6 +221,9 @@
     var mapState = { showFlag0: false, showMW: true, showFO: false, flagFilter: '1' };
     var mapInstance = null, layers = {};
     var sitesFlag1 = [], sitesFlag0Raw = [];
+    var semCoordList = [];   // [{eid, site, cidade}] sem coordenada
+    var comCoordList = [];   // [{eid, site, cidade, coordStr}] com coordenada (editáveis)
+    var semCoordPanelEl = null;
 
     // Filtros ativos
     var _filtros = { regiao: null, soTSK: false, legSemTSK: true, legComTSK: true, legRecente: true };
@@ -262,14 +332,22 @@
     // ── Barra de filtros por região ────────────────────────────
     var REGIOES_FILTER = C.REGIOES.filter(function(r){ return r !== 'OTHERS'; });
     var _regiaoChips = {};
+    var _regiaoCountEls = {};
     var regionBar = U.h('div', { style:{ display:'flex', gap:'6px', flexWrap:'wrap', marginTop:'6px', marginBottom:'2px' } });
     REGIOES_FILTER.forEach(function(r) {
+      var cntEl = U.h('span', {
+        style: { fontSize:'10px', display:'block', fontWeight:'400', opacity:'0.7', marginTop:'2px', lineHeight:'1', letterSpacing:'0.01em' },
+        text: '—'
+      });
       var chip = U.h('button', {
         class: 'tmg-btn tmg-btn-ghost clickable',
-        style: { fontSize:'11px', padding:'3px 12px', borderRadius:'999px', transition:'all .15s', border:'1px solid var(--tmg-border)' },
-        text: C.REGIAO_LABELS[r] || r
-      });
+        style: { fontSize:'11px', padding:'4px 12px', borderRadius:'10px', transition:'all .15s', border:'1px solid var(--tmg-border)', textAlign:'center', lineHeight:'1.35' }
+      }, [
+        U.h('span', { style:{ display:'block', fontWeight:'600' }, text: C.REGIAO_LABELS[r] || r }),
+        cntEl
+      ]);
       _regiaoChips[r] = chip;
+      _regiaoCountEls[r] = cntEl;
       chip.addEventListener('click', function() {
         if (_filtros.regiao === r) {
           _filtros.regiao = null;
@@ -283,6 +361,32 @@
       });
       regionBar.appendChild(chip);
     });
+    // Preencher contagens por região (dedup por END_id por região)
+    (function() {
+      var tasksAt = tasks.filter(function(t) {
+        var s = (t.status||'').toUpperCase().replace(/[ÁÀÂÃ]/g,'A').replace(/[ÉÈ]/g,'E');
+        return s.indexOf('INICIADO') >= 0 && s !== 'CONCLUIDA' && s !== 'CANCELADA' && s !== 'CANCELADO';
+      });
+      var incAt = incidents.filter(function(i){ return (i.statusTrat||'').toUpperCase() !== 'RESOLVIDO'; });
+      var cnt = {}, seen = {};
+      incAt.forEach(function(inc) {
+        var r = inc.regiao || 'OTHERS';
+        if (REGIOES_FILTER.indexOf(r) < 0) return;
+        var eid = (inc.enderecoId||'').trim();
+        var key = r + '|' + eid;
+        if (seen[key]) return;
+        seen[key] = true;
+        if (!cnt[r]) cnt[r] = { total:0, comTSK:0 };
+        cnt[r].total++;
+        if (U.tskAberta && U.tskAberta(inc, tasksAt)) cnt[r].comTSK++;
+      });
+      REGIOES_FILTER.forEach(function(r) {
+        var el = _regiaoCountEls[r]; if (!el) return;
+        var c = cnt[r] || { total:0, comTSK:0 };
+        if (!c.total) { el.textContent = '—'; return; }
+        el.textContent = c.total + ' · ✓' + c.comTSK + ' · ○' + (c.total - c.comTSK);
+      });
+    })();
     var btnRelatorio = U.h('button', {
       class: 'tmg-btn tmg-btn-ghost clickable',
       style: { fontSize:'11px', padding:'3px 12px', borderRadius:'999px', border:'1px solid var(--tmg-border)', marginLeft:'auto', whiteSpace:'nowrap' },
@@ -290,6 +394,15 @@
     });
     btnRelatorio.addEventListener('click', gerarRelatorio);
     regionBar.appendChild(btnRelatorio);
+
+    var btnXlsx = U.h('button', {
+      class: 'tmg-btn tmg-btn-ghost clickable',
+      style: { fontSize:'11px', padding:'3px 10px', borderRadius:'999px', border:'1px solid var(--tmg-border)', whiteSpace:'nowrap', opacity:'0.75' },
+      text: '⬇ coords.xlsx'
+    });
+    btnXlsx.addEventListener('click', exportarCoordXlsx);
+    if (!readOnly) regionBar.appendChild(btnXlsx);
+
     container.appendChild(regionBar);
 
     // ── Painel de rota ────────────────────────────────────────────────────
@@ -470,6 +583,14 @@
       }));
     // Associar cliques nas legendas — por item, com estado visual
     container.appendChild(legEl);
+
+    if (!readOnly) {
+      semCoordPanelEl = U.h('div', {
+        style: { marginTop:'8px', background:'var(--tmg-card)', border:'1px solid var(--tmg-border)',
+                 borderRadius:'8px', overflow:'hidden', display:'none' }
+      });
+      container.appendChild(semCoordPanelEl);
+    }
     var MW_VENDOR_BY_LEG_IDX = { 4:'NOKIA', 5:'HUAWEI', 6:'CERAGON', 7:'ERICSSON', 8:'SIAE' };
     Array.prototype.forEach.call(legEl.children, function(el, idx) {
       var item = legItems[idx];
@@ -522,8 +643,11 @@
 
     function initMap() {
       if (mapInstance) return;
+      var initCenter = ctx.prevCenter || [-19.9, -43.9];
+      var initZoom   = (ctx.prevZoom  != null) ? ctx.prevZoom : 7;
       mapInstance = window.L.map('tmg-mapa-leaflet', { preferCanvas: true, zoomControl: true })
-        .setView([-22.3, -43.1], 8);
+        .setView(initCenter, initZoom);
+      if (readOnly) TMG._publicMapInstance = mapInstance; // permite salvar estado no refresh silencioso
 
       window.L.tileLayer('https://server.arcgisonline.com/arcgis/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
         attribution: '&copy; <a href="https://www.esri.com/">Esri</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -820,7 +944,11 @@
               var trecho = '   ↓ ~' + distKm.toFixed(1) + ' km';
               if (usouOSRM) {
                 var dur = _durEntre(s, sorted[i+1]);
-                if (dur != null) trecho += ' · ~' + Math.round(dur / 60) + ' min';
+                if (dur != null) {
+                  var _m = Math.round(dur / 60);
+                  var _t = _m < 60 ? _m + 'min' : (Math.floor(_m/60) + 'h' + (_m%60 ? (_m%60) + 'min' : ''));
+                  trecho += ' · ~' + _t;
+                }
                 trecho += ' (por estrada)';
               }
               if (distKm > 80) trecho += '  ⚠️ longa distância';
@@ -875,15 +1003,15 @@
         if (d.cor === '#f0b429' && !_filtros.legRecente) okTipo = false;
         if (_filtros.soTSK && !d.tsk) okTipo = false;
         var visible = okSite && okRegiao && okTipo;
-        m.setOpacity(visible ? 1 : 0.07);
+        m.setOpacity(visible ? 1 : 0);
         if (visible) matched.push(m);
       });
 
       Object.values(layers.fo && layers.fo._layers ? layers.fo._layers : {}).forEach(function(m) {
         var d = m._d || {};
         var ok = !q || (d.eid||'').toLowerCase().indexOf(q)>=0 || (d.nome||'').toLowerCase().indexOf(q)>=0;
-        if (m.setOpacity) m.setOpacity(ok ? 1 : 0.07);
-        else if (m.setStyle) m.setStyle({ fillOpacity: ok ? 0.85 : 0.05, opacity: ok ? 1 : 0.05 });
+        if (m.setOpacity) m.setOpacity(ok ? 1 : 0);
+        else if (m.setStyle) m.setStyle({ fillOpacity: ok ? 0.85 : 0, opacity: ok ? 1 : 0 });
         if (ok && mapInstance && mapInstance.hasLayer(layers.fo)) matched.push(m);
       });
 
@@ -1023,6 +1151,7 @@
 
       updateStats(sitesFlag1.length, cTSK, cSemCoord);
       _populateCityDL('');
+      calcSemCoordList();
     }
 
     // ── Renderizar MW + FO (static, from stored data) ──────────
@@ -1040,6 +1169,180 @@
         if (eid) eidsAtivos[eid] = true;
       });
       return eidsAtivos;
+    }
+
+    function calcSemCoordList() {
+      var seen = {};
+      var incAtivos = incidents.filter(function(i){ return (i.statusTrat||'').toUpperCase() !== 'RESOLVIDO'; });
+      semCoordList = [];
+      comCoordList = [];
+      incAtivos.forEach(function(inc) {
+        var eid = (inc.enderecoId||'').trim();
+        if (!eid || seen[eid]) return;
+        seen[eid] = true;
+        var c = coordMap[eid] || (inc._lat && inc._lon ? [parseFloat(inc._lat), parseFloat(inc._lon)] : null);
+        var item = { eid: eid, site: inc.site||'', cidade: (inc.cidadeUf||'').split('/')[0].trim() };
+        if (c) {
+          item.coordStr = parseFloat(c[0]).toFixed(6) + ', ' + parseFloat(c[1]).toFixed(6);
+          comCoordList.push(item);
+        } else {
+          semCoordList.push(item);
+        }
+      });
+      updateSemCoordPanel();
+    }
+
+    function updateSemCoordPanel() {
+      if (!semCoordPanelEl) return;
+      if (!semCoordList.length && !comCoordList.length) { semCoordPanelEl.style.display = 'none'; return; }
+      semCoordPanelEl.style.display = '';
+      semCoordPanelEl.innerHTML = '';
+      if (semCoordList.length) appendCoordSection(semCoordPanelEl, semCoordList, false);
+      if (comCoordList.length) appendCoordSection(semCoordPanelEl, comCoordList, true);
+    }
+
+    function appendCoordSection(container, items, hasCoords) {
+      var NS = 'tmg'; // prefixo CSS
+      var expanded = false;
+      var label = hasCoords
+        ? '📍 ' + items.length + ' site(s) com coordenada'
+        : '⚠ ' + items.length + ' site(s) sem coordenada';
+      var color = hasCoords ? 'var(--tmg-muted)' : '#e67e22';
+      var sep = container.children.length > 0;
+      var toggleBtn = U.h('span', { style:{ marginLeft:'auto', fontSize:'12px', cursor:'pointer', color:'var(--tmg-muted)' }, text: '▸' });
+      var header = U.h('div', {
+        style:{ display:'flex', alignItems:'center', gap:'8px', padding:'8px 14px', cursor:'pointer',
+                borderBottom:'1px solid transparent',
+                borderTop: sep ? '1px solid var(--tmg-border)' : 'none' }
+      }, [
+        U.h('span', { style:{ fontSize:'12px', fontWeight:'600', color: color }, text: label }),
+        toggleBtn
+      ]);
+      var colsHdr = hasCoords
+        ? ['END_id','Site','Cidade','Coordenada','']
+        : ['END_id','Site','Cidade','Latitude','Longitude',''];
+      var tbody = U.h('div', { style:{ display:'none', overflowX:'auto', maxHeight:'320px', overflowY:'auto' } });
+      var tbl = document.createElement('table');
+      tbl.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;';
+      var hrow = tbl.createTHead().insertRow();
+      colsHdr.forEach(function(h) {
+        var th = document.createElement('th');
+        th.textContent = h;
+        th.style.cssText = 'text-align:left;padding:5px 10px;color:var(--tmg-muted);font-weight:600;position:sticky;top:0;background:var(--tmg-card);border-bottom:1px solid var(--tmg-border);';
+        hrow.appendChild(th);
+      });
+      var tbodyEl = tbl.createTBody();
+
+      items.forEach(function(item) {
+        var tr = tbodyEl.insertRow();
+        tr.style.borderBottom = '1px solid var(--tmg-border)';
+        [item.eid, item.site||'—', item.cidade||'—'].forEach(function(txt) {
+          var td = tr.insertCell(); td.style.padding = '5px 10px'; td.style.color = 'var(--tmg-muted)';
+          td.textContent = txt;
+        });
+        if (hasCoords) {
+          var coordParts = (item.coordStr||'').split(',');
+          var latVal = (coordParts[0]||'').trim();
+          var lonVal = (coordParts[1]||'').trim();
+          var tdCoord = tr.insertCell(); tdCoord.style.padding = '5px 10px';
+          var tdAcao  = tr.insertCell(); tdAcao.style.padding = '4px 8px';
+          var coordDisplay = U.h('span', { style:{ color:'var(--tmg-muted)', fontFamily:'monospace', fontSize:'11px' }, text: item.coordStr });
+          var latInp = U.h('input', { type:'text', value: latVal, style:{ width:'90px', background:'var(--tmg-card2)', border:'1px solid var(--tmg-border)', borderRadius:'4px', color:'var(--tmg-fg)', padding:'3px 6px', fontSize:'12px', outline:'none', display:'none' } });
+          var lonInp = U.h('input', { type:'text', value: lonVal, style:{ width:'90px', background:'var(--tmg-card2)', border:'1px solid var(--tmg-border)', borderRadius:'4px', color:'var(--tmg-fg)', padding:'3px 6px', fontSize:'12px', outline:'none', display:'none' } });
+          var editBtn   = U.h('button', { class:'tmg-btn tmg-btn-ghost clickable', style:{fontSize:'11px',padding:'3px 8px'}, text:'✏ editar' });
+          var saveBtn   = U.h('button', { class:'tmg-btn tmg-btn-primary clickable', style:{fontSize:'11px',padding:'3px 10px',display:'none'}, text:'💾' });
+          var cancelBtn = U.h('button', { class:'tmg-btn tmg-btn-ghost clickable', style:{fontSize:'11px',padding:'3px 8px',display:'none',marginLeft:'4px'}, text:'✖' });
+          tdCoord.appendChild(coordDisplay); tdCoord.appendChild(latInp); tdCoord.appendChild(lonInp);
+          tdAcao.appendChild(editBtn); tdAcao.appendChild(saveBtn); tdAcao.appendChild(cancelBtn);
+          editBtn.addEventListener('click', function() {
+            coordDisplay.style.display='none'; latInp.style.display=''; lonInp.style.display='';
+            editBtn.style.display='none'; saveBtn.style.display=''; cancelBtn.style.display='';
+          });
+          cancelBtn.addEventListener('click', function() {
+            latInp.value=latVal; lonInp.value=lonVal;
+            coordDisplay.style.display=''; latInp.style.display='none'; lonInp.style.display='none';
+            editBtn.style.display=''; saveBtn.style.display='none'; cancelBtn.style.display='none';
+          });
+          saveBtn.addEventListener('click', function() {
+            salvarCoordManual(item.eid, latInp.value, lonInp.value, function() {
+              var newCoord = parseFloat(latInp.value.replace(',','.')).toFixed(6) + ', ' + parseFloat(lonInp.value.replace(',','.')).toFixed(6);
+              item.coordStr = newCoord;
+              latVal = newCoord.split(',')[0].trim(); lonVal = newCoord.split(',')[1].trim();
+              coordDisplay.textContent = newCoord;
+              coordDisplay.style.display=''; latInp.style.display='none'; lonInp.style.display='none';
+              editBtn.style.display=''; saveBtn.style.display='none'; cancelBtn.style.display='none';
+            });
+          });
+        } else {
+          var latInp = U.h('input', { type:'text', placeholder:'-19.9173', style:{ width:'95px', background:'var(--tmg-card2)', border:'1px solid var(--tmg-border)', borderRadius:'4px', color:'var(--tmg-fg)', padding:'3px 6px', fontSize:'12px', outline:'none' } });
+          var lonInp = U.h('input', { type:'text', placeholder:'-43.9346', style:{ width:'95px', background:'var(--tmg-card2)', border:'1px solid var(--tmg-border)', borderRadius:'4px', color:'var(--tmg-fg)', padding:'3px 6px', fontSize:'12px', outline:'none' } });
+          var tdLat = tr.insertCell(); tdLat.style.padding = '4px 8px'; tdLat.appendChild(latInp);
+          var tdLon = tr.insertCell(); tdLon.style.padding = '4px 8px'; tdLon.appendChild(lonInp);
+          var btnSave = U.h('button', { class:'tmg-btn tmg-btn-primary clickable', style:{fontSize:'11px',padding:'3px 10px'}, text:'💾' });
+          btnSave.addEventListener('click', function() {
+            salvarCoordManual(item.eid, latInp.value, lonInp.value, function() {
+              tr.style.opacity='0.4'; btnSave.disabled=true; btnSave.textContent='✓';
+            });
+          });
+          var tdAcao = tr.insertCell(); tdAcao.style.padding = '4px 8px'; tdAcao.appendChild(btnSave);
+        }
+      });
+      tbody.appendChild(tbl);
+      header.addEventListener('click', function() {
+        expanded = !expanded;
+        tbody.style.display = expanded ? '' : 'none';
+        toggleBtn.textContent = expanded ? '▾' : '▸';
+        header.style.borderBottomColor = expanded ? 'var(--tmg-border)' : 'transparent';
+      });
+      container.appendChild(header);
+      container.appendChild(tbody);
+    }
+
+    function salvarCoordManual(eid, latStr, lonStr, onDone) {
+      var lat = parseFloat(String(latStr).replace(',', '.'));
+      var lon = parseFloat(String(lonStr).replace(',', '.'));
+      if (isNaN(lat) || isNaN(lon) || !eid) { U.toast && U.toast('Latitude/longitude inválidas', 'err'); return; }
+      coordMap[eid] = [lat, lon];
+      saveLS(LS_COORDS, coordMap);
+      var coordStr = lat.toFixed(6) + ', ' + lon.toFixed(6);
+      if (TMG.api && TMG.api.saveMapaCoords) TMG.api.saveMapaCoords(coordMap).catch(function(){});
+      if (TMG.api && TMG.api.saveCoordVALID_CAD) TMG.api.saveCoordVALID_CAD([{ endId: eid, coord: coordStr }]).catch(function(){});
+      if (mapaMarkers.length) renderSites(mapaMarkers);
+      else renderComCoordMap();
+      renderEstaticos();
+      U.toast && U.toast('Coord salva: ' + eid, 'ok');
+      onDone && onDone();
+    }
+
+    function exportarCoordXlsx() {
+      function doExport(XLSX) {
+        var rows = [];
+        var seen = {};
+        (mapaMarkers.length ? mapaMarkers : []).forEach(function(m) {
+          var eid = (m.ENDID || m.endId || '').trim();
+          var lat = parseCoord(m.Latitude || m.lat);
+          var lon = parseCoord(m.Longitude || m.lon);
+          if (!eid || isNaN(lat) || !lat) return;
+          seen[eid] = true;
+          rows.push({ 'Cidade': m.municipio || m.cidade || '', 'END_id': eid, 'NEid': m.NEName || '', 'Coordenada': lat.toFixed(6) + ', ' + lon.toFixed(6) });
+        });
+        Object.keys(coordMap).forEach(function(eid) {
+          if (seen[eid]) return;
+          var c = coordMap[eid];
+          rows.push({ 'Cidade': '', 'END_id': eid, 'NEid': siteByEndId[eid] || '', 'Coordenada': c[0].toFixed(6) + ', ' + c[1].toFixed(6) });
+        });
+        if (!rows.length) { U.toast && U.toast('Nenhuma coordenada disponível', 'warn'); return; }
+        var wb = XLSX.utils.book_new();
+        var ws = XLSX.utils.json_to_sheet(rows, { header: ['Cidade','END_id','NEid','Coordenada'] });
+        ws['!cols'] = [{wch:20},{wch:18},{wch:18},{wch:22}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Coordenadas');
+        XLSX.writeFile(wb, 'coordenadas_tmg.xlsx');
+      }
+      if (window.XLSX) { doExport(window.XLSX); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = function() { doExport(window.XLSX); };
+      document.head.appendChild(s);
     }
 
     function renderEstaticos() {
@@ -1135,7 +1438,7 @@
       // ── FLAG 1: só incidentes reais ──
       incAtivos.forEach(function(inc) {
         var eid = (inc.enderecoId||'').trim();
-        var coords = coordMap[eid];
+        var coords = coordMap[eid] || (inc._lat && inc._lon ? [inc._lat, inc._lon] : null);
         if (!coords) { cSemCoord++; return; }
         var nome = inc.site || siteByEndId[eid] || eid;
         var tsk = U.tskAberta ? U.tskAberta(inc, tasksAtivas) : null;
@@ -1185,6 +1488,7 @@
 
       updateStats(incAtivos.length, cTSK, cSemCoord);
       _populateCityDL('');
+      calcSemCoordList();
     }
 
     function updateStats(total, comTSK, semCoord) {
@@ -1251,8 +1555,22 @@
         var result = parseGenesisParaMapa(ev.target.result);
         coordMap = result.coordMap; mwData = result.mwData; foData = result.foData;
         mapaMarkers = result.markerData || [];
-        U.toast('Genesis: ' + result.siteCount + ' sites / ' + result.coordCount + ' coords importadas.', 'ok');
         fileInput.value = '';
+        if (result.coordCount > 0) {
+          U.toast('Genesis: ' + result.siteCount + ' sites / ' + result.coordCount + ' coords importadas.', 'ok');
+          if (TMG.api && TMG.api.saveMapaCoords) {
+            TMG.api.saveMapaCoords(result.coordMap).catch(function() {});
+          }
+        } else {
+          var di = result.debugInfo || {};
+          var msg = 'ATENÇÃO: 0 coordenadas encontradas neste HTML.\n\n'
+            + 'Variáveis JS detectadas no arquivo: ' + (di.varsFound && di.varsFound.length ? di.varsFound.join(', ') : 'nenhuma') + '\n'
+            + 'Tamanho do arquivo: ' + (di.htmlLen || 0) + ' chars\n\n'
+            + 'Verifique se este é o HTML do MAPA do Genesis (não o de incidentes).\n'
+            + 'Primeiros caracteres do arquivo:\n' + (di.snippet || '');
+          alert(msg);
+          U.toast('Formato não reconhecido — 0 coords. Verifique se é o HTML correto.', 'err');
+        }
         getLeaflet(function() {
           initMap();
           if (mapaMarkers.length) renderSites(mapaMarkers);

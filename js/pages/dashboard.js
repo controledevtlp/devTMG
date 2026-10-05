@@ -415,33 +415,87 @@
     };
   }
 
-  function publicarSnapshotPublico(data) {
+  async function publicarSnapshotPublico(data) {
     try {
       // Incluir coordMap no snapshot para que o mapa funcione em qualquer dispositivo.
-      // Publica somente o coordMap (ENDID→[lat,lon]) para manter o payload enxuto.
-      // mwData e foData são grandes demais para o snapshot; ficam no localStorage do usuário.
       function tryLS(key) {
         try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(e){ return null; }
       }
       var coordMapLS = tryLS('tmg_coordMap') || {};
-      // Slim mwData: só as colunas necessárias para as polylines
-      var mwDataLS = tryLS('tmg_mwData') || [];
+
+      // Se localStorage não tem coordMap (browser novo, cache limpo), buscar do servidor
+      if (!Object.keys(coordMapLS).length && TMG.api && TMG.api.getMapaCoords) {
+        try {
+          var remoto = await TMG.api.getMapaCoords();
+          if (remoto && remoto.coords && Object.keys(remoto.coords).length) {
+            coordMapLS = remoto.coords;
+            try { localStorage.setItem('tmg_coordMap', JSON.stringify(coordMapLS)); } catch(e){}
+          }
+        } catch(e) {}
+      }
+      // Slim mwData: localStorage primeiro, fallback para cache em memória do mapa.js
+      var mwDataLS = tryLS('tmg_mwData') || (TMG._mwDataCache && TMG._mwDataCache.length ? TMG._mwDataCache : []);
       var mwSlim = mwDataLS.length > 0 ? mwDataLS.map(function(l) {
         return { E2:l.Enlace2||'', LA:l.LAT_A, LO:l.LONG_A, LB:l.LAT_B, LOB:l.LONG_B, F:l.FORNECEDOR||'' };
       }) : null;
-      // Slim foData: só as colunas necessárias para os marcadores
-      var foDataLS = tryLS('tmg_foData') || [];
+      // Slim foData: localStorage primeiro, fallback para cache em memória do mapa.js
+      var foDataLS = tryLS('tmg_foData') || (TMG._foDataCache && TMG._foDataCache.length ? TMG._foDataCache : []);
       var foSlim = foDataLS.length > 0 ? foDataLS.map(function(h) {
         return { N:h.NEName||'', H:h.HUB||'', LA:h.LAT_A, LO:h.LONG_A, F:h.FORNECEDOR||'' };
       }) : null;
 
+      var mapaMarkersLS = tryLS('tmg_mapaMarkers') || [];
+      console.log('[Dashboard] snapshot coords — coordMapLS:', Object.keys(coordMapLS).length,
+                  'mapaMarkersLS:', mapaMarkersLS.length,
+                  'mwLS:', mwDataLS.length, 'foLS:', foDataLS.length,
+                  'incidentsEnriched:', (data.incidentsEnriched||[]).length);
+      var mapaMarkersSlim = mapaMarkersLS.length > 0 ? mapaMarkersLS.map(function(s) {
+        return {
+          lat:   s.lat   || s.Latitude  || null,
+          lon:   s.lon   || s.Longitude || null,
+          endId: s.ENDID || s.endId     || '',
+          nome:  s.NEName || s.nome     || '',
+          cidade: s.municipio || s.cidade || '',
+          flag:  s.flag !== undefined ? s.flag : (s.FLAG !== undefined ? s.FLAG : 1),
+          tempo: s.tempo || 0
+        };
+      }) : null;
+
+      // Montar coordMap completo: coordMapLS + coords extraídas do mapaMarkersLS
+      var coordMapFull = Object.assign({}, coordMapLS);
+      // Índice por NEName como fallback quando ENDID não bate com enderecoId do incidente
+      var coordByName = {};
+      mapaMarkersLS.forEach(function(s) {
+        var eid = (s.ENDID || s.endId || '').trim();
+        var lat = parseFloat(String(s.lat || s.Latitude || '').replace(',', '.'));
+        var lon = parseFloat(String(s.lon || s.Longitude || '').replace(',', '.'));
+        if (!isNaN(lat) && !isNaN(lon) && lat && lon) {
+          if (eid && !coordMapFull[eid]) coordMapFull[eid] = [lat, lon];
+          var name = (s.NEName || s.nome || '').trim().toUpperCase();
+          if (name && !coordByName[name]) coordByName[name] = [lat, lon];
+        }
+      });
+
+      // Embutir coords diretamente em cada incidente para que o dashboard público
+      // possa plotar marcadores sem depender de nenhuma fonte externa de coordenadas.
+      // Tenta: 1) lookup por enderecoId (ENDID), 2) lookup por nome do site (NEName)
+      var incComCoords = (data.incidentsEnriched || []).map(function(inc) {
+        if (inc._lat) return inc;
+        var eid = (inc.enderecoId || '').trim();
+        var siteName = (inc.site || '').trim().toUpperCase();
+        var coords = coordMapFull[eid] || coordByName[siteName] || null;
+        if (!coords) return inc;
+        return Object.assign({}, inc, { _lat: coords[0], _lon: coords[1] });
+      });
+
       var payload = {
         tasksEnriched:     (data.tasksEnriched || []).map(slimTaskForPublish),
-        incidentsEnriched: data.incidentsEnriched || [],
+        incidentsEnriched: incComCoords,
         prazoMap:          data.prazoMap || {},        // necessário para SLA/Aderência
-        mapaCoordMap: Object.keys(coordMapLS).length > 0 ? coordMapLS : null,
-        mapaMwSlim:   mwSlim,
-        mapaFoSlim:   foSlim
+        mapaCoordMap:      Object.keys(coordMapFull).length > 0 ? coordMapFull : null,
+        mapaMarkersSlim:   mapaMarkersSlim,
+        mapaMwSlim:        mwSlim,
+        mapaFoSlim:        foSlim
       };
       var jsonStr = JSON.stringify(payload);
       if (jsonStr === _ultimoSnapshotJSON) return;

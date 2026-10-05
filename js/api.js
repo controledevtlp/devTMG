@@ -147,6 +147,21 @@
     return call('saveDashboardSnapshot', { snapshot: snapshot || {} });
   };
 
+  A.saveMapaCoords = function (coords) {
+    if (offline()) return Promise.resolve({ ok: true, offline: true });
+    return call('saveMapaCoords', { coords: coords || {} });
+  };
+
+  A.saveCoordVALID_CAD = function (entries) {
+    if (offline()) return Promise.resolve({ ok: true, offline: true });
+    return call('saveCoordVALID_CAD', { entries: entries || [] });
+  };
+
+  A.getMapaCoords = function () {
+    if (offline()) return Promise.resolve({ ok: true, coords: null });
+    return call('getMapaCoords', {});
+  };
+
   // Histórico de produtividade (dias já processados).
   // Offline: usa localStorage como fallback. Online: sincroniza com GAS.
   var LS_PROD = 'tmg_prod_hist_v1';
