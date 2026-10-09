@@ -1354,7 +1354,11 @@
   }
 
   function classificarCciCampo(filaAtual) {
-    return normalize(filaAtual).indexOf('OPERADOR_') >= 0 ? 'CCI' : 'Campo';
+    // Filas CCI do TMG:
+    //   CENTRALIZADO TLP, CENTRALIZADO_FMT_TMG, CENTRALIZADO_TLP_(TMG_2/3)
+    //   COMMAND_CENTER_FMMT_31/32/33/34/35/37/38
+    var n = normalize(filaAtual);
+    return (n.indexOf('CENTRALIZADO') >= 0 || n.indexOf('COMMAND_CENTER') >= 0) ? 'CCI' : 'Campo';
   }
 
   function dedupPorTsk(rows) {
