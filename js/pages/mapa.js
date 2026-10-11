@@ -20,7 +20,7 @@
   var LS_MW       = 'tmg_mwData';
   var LS_FO       = 'tmg_foData';
   var LS_MARKERS  = 'tmg_mapaMarkers';  // sites fora com coordenadas (markerData do Genesis)
-  var PONTE_URL   = 'http://localhost:5057';
+  var PONTE_URL   = 'http://localhost:5057/api/tmg';
 
   // ── Cores exatas do mapa original ───────────────────────────
   var MW_CORES = {
@@ -1519,10 +1519,10 @@
     function buscarViaPonte() {
       btnPonte.textContent = 'Buscando...';
       btnPonte.disabled = true;
-      fetch(PONTE_URL + '/api/saude')
+      fetch(PONTE_URL + '/saude')
         .then(function(r) { return r.json(); })
         .then(function() {
-          return fetch(PONTE_URL + '/api/mapa?flag=');
+          return fetch(PONTE_URL + '/mapa?flag=');
         })
         .then(function(r) { return r.json(); })
         .then(function(json) {
