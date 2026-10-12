@@ -635,13 +635,16 @@
   // ---------- Tabela de tasks (drill) ----------
   // opts.modoResultado = true  → última coluna mostra "Dentro SLA / Fora SLA" (concluídas)
   // opts.modoCancelamento = true → última coluna mostra "Automação / Associação" (canceladas)
+  // opts.modoGmg = true → coluna "P" mostra habilidadeTrabalho (confirma que é GMG)
   // sem flag → mostra tempo restante (backlog aberto)
   U.taskTable = function (rows, opts) {
     opts = opts || {};
     var modoResultado = opts.modoResultado;
     var modoCancelamento = opts.modoCancelamento;
+    var modoGmg = opts.modoGmg;
     var colLabel = modoCancelamento ? 'Tipo Cancelamento' : (modoResultado ? 'Resultado SLA' : 'Vencimento');
-    var thead = h('thead', null, h('tr', null, ['Região', 'TSK', 'Site', 'Cidade', 'Falha', 'P', 'Criação NTT', colLabel].map(function (t) { return h('th', { text: t }); })));
+    var colP = modoGmg ? 'Habilidade' : 'P';
+    var thead = h('thead', null, h('tr', null, ['Região', 'TSK', 'Site', 'Cidade', 'Falha', colP, 'Criação NTT', colLabel].map(function (t) { return h('th', { text: t }); })));
     var body = rows.slice(0, 1000).map(function (t) {
       var lastCell;
       if (modoCancelamento) lastCell = U.cancelamentoBadge(t);
@@ -652,13 +655,14 @@
       // não como dezembro 6 (US) que new Date() faria.
       var rawNTT = t.dataCriacaoAS || t.dataCriacao;
       var dtNTT = rawNTT ? (D.parsePlatformDate ? D.parsePlatformDate(rawNTT) : null) : null;
+      var pCell = modoGmg ? (t.habilidadeTrabalho || '—') : (t.prioridade || '—');
       return h('tr', null, [
         h('td', { text: C.REGIAO_LABELS[t.regiao] || t.regiao || '—' }),
         h('td', { text: t.osNumero || '—' }),
         h('td', { text: t.siteId || t.enderecoId || '—' }),
         h('td', { text: t.cidade || '—' }),
         h('td', { text: t.tipoFalha || '—' }),
-        h('td', { text: t.prioridade || '—' }),
+        h('td', { text: pCell }),
         h('td', { text: dtNTT ? D.formatarDataCompacta(dtNTT) : '—' }),
         h('td', null, lastCell)
       ]);
@@ -1013,7 +1017,7 @@
   var RE_TLP_UI    = /TLP-T\d+-([^-\r\n]{3,60}?)\s*-\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/g;
   var RE_DTNAME_UI = /(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}(?::\d{2})?)\s*-\s*([^\r\n]{5,80})/g;
   // Bot filter: nomes de sistemas automáticos (início) OU "(Anotações de trabalho)" em qualquer posição
-  var RE_BOT_UI = /^(?:MONITOR\s*CCI|WFM\s*Agent|isoc_fixa|[Aa]utoma[çc][aã]o|Sistema\s*autom|System\b|Raio-X|dsoc_[a-z_]|taischatbot|\w+chatbot)|\(anota/i;
+  var RE_BOT_UI = /^(?:MONITOR\s*CCI|WFM\s*Agent|isoc_fixa|[Aa]utoma[çc][aã]o|Sistema\s*autom|System\b|Raio-X|dsoc_[a-z_]|taischatbot|\w+chatbot)/i;
   function parseTlpEntries(texto) {
     if (!texto) return [];
     var entries = [], m;
@@ -1028,8 +1032,10 @@
     // Formato 2: DD/MM/YYYY HH:MM:SS - NOME
     RE_DTNAME_UI.lastIndex = 0;
     while ((m = RE_DTNAME_UI.exec(texto)) !== null) {
-      var nome = m[2].trim();
-      if (RE_BOT_UI.test(nome)) continue;
+      // Remove o sufixo "(Anotações de trabalho)" que a plataforma acrescenta a TODOS os
+      // autores — inclusive humanos — antes de checar se é bot.
+      var nome = m[2].trim().replace(/\s*\([Aa]nota[çc][õo]es\s+de\s+trabalho\)/i, '').trim();
+      if (!nome || RE_BOT_UI.test(nome)) continue;
       var p2 = m[1].trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
       if (!p2) continue;
       var dt2 = new Date(+p2[3], +p2[2]-1, +p2[1], +p2[4], +p2[5], p2[6]?+p2[6]:0);
@@ -1059,7 +1065,8 @@
   //   'ok'          → última entrada real é de hoje
   //   'antigo'      → última entrada real é de ontem ou anterior
   function classificarUltimoBloco(bgTexto) {
-    if (isTextoSemAtualizacao(bgTexto)) return { estado: 'sem', texto: null, dt: null };
+    // NÃO verifica isTextoSemAtualizacao no diário inteiro: blocos antigos com frases
+    // de ODM/bot ficam no histórico mas não invalidam entradas TLP-T recentes.
     var bloco = extrairBlocoMaisRecente(bgTexto);
     var textoDisplay = bloco ? bloco.texto : (bgTexto ? bgTexto.toString().trim() : null);
 
@@ -1067,19 +1074,27 @@
     var tlpEntries = parseTlpEntries(bgTexto || '');
     var dtRef = tlpEntries.length ? tlpEntries[tlpEntries.length - 1].dt : (bloco ? bloco.dt : null);
 
-    if (!dtRef) return { estado: 'sem', texto: textoDisplay, dt: null };
+    if (!dtRef) {
+      // Sem timestamps: verifica se o conteúdo é puramente automático
+      if (isTextoSemAtualizacao(bgTexto)) return { estado: 'sem', texto: null, dt: null };
+      return { estado: 'sem', texto: textoDisplay, dt: null };
+    }
 
     var txtUpper = (textoDisplay || '').toUpperCase();
     if (txtUpper.indexOf('VERIFICANDO ACIONAMENTO') >= 0) return { estado: 'acionamento', texto: textoDisplay, dt: dtRef };
 
-    // Filtro de MONITOR CCI só é necessário no fallback (sem TLP-T), pois TLP-T já exclui bots
-    if (!tlpEntries.length && txtUpper.indexOf('MONITOR CCI') >= 0) {
-      for (var fi = 0; fi < FRASES_PADRAO_BOT.length; fi++) {
-        if (txtUpper.indexOf(FRASES_PADRAO_BOT[fi].toUpperCase()) >= 0) {
-          return { estado: 'sem', texto: null, dt: null };
+    // Filtro de bot só no fallback (sem TLP-T): aplica isTextoSemAtualizacao APENAS no
+    // bloco mais recente, nunca no diário inteiro, para evitar falso-positivo por ODM antigo.
+    if (!tlpEntries.length) {
+      if (bloco && isTextoSemAtualizacao(bloco.texto)) return { estado: 'sem', texto: null, dt: null };
+      if (txtUpper.indexOf('MONITOR CCI') >= 0) {
+        for (var fi = 0; fi < FRASES_PADRAO_BOT.length; fi++) {
+          if (txtUpper.indexOf(FRASES_PADRAO_BOT[fi].toUpperCase()) >= 0) {
+            return { estado: 'sem', texto: null, dt: null };
+          }
         }
+        return { estado: 'acionamento', texto: textoDisplay, dt: dtRef };
       }
-      return { estado: 'acionamento', texto: textoDisplay, dt: dtRef };
     }
 
     var agora = new Date();

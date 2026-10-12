@@ -250,9 +250,18 @@
     if (baseEnc > 0) slaGeral = Math.round((encDentro / baseEnc) * 1000) / 10;
     else { var baseBl = dentro.length + fora.length; slaGeral = baseBl > 0 ? Math.round((dentro.length / baseBl) * 1000) / 10 : 0; }
 
+    // GMG (Planta Interna - GMG(1/1)): backlog faturável — NÃO INICIADO/INICIADO,
+    // deduplicado por TSK (ticketsDedup já aplica a lógica da coluna C).
+    var gmgBacklog = ticketsDedup.filter(function (t) {
+      var s = (t.status || '').trim().toUpperCase();
+      if (s !== 'NÃO INICIADO' && s !== 'NAO INICIADO' && s !== 'INICIADO') return false;
+      return (t.habilidadeTrabalho || '').toUpperCase().indexOf('GMG') >= 0;
+    });
+
     var kpis = {
       foraSla: fora.length, backlogTotal: backlog.length, backlogIndef: indef.length,
-      preditiva: preditiva.length, produtividade: concluidas.length, slaGeral: slaGeral
+      preditiva: preditiva.length, produtividade: concluidas.length, slaGeral: slaGeral,
+      gmg: gmgBacklog.length
     };
 
     // Aging — backlog já é filtrado para tasks com dataCriacaoAS (regra de negócio).
@@ -582,6 +591,11 @@
         if (!lado3) return list.filter(function (t) { return t.statusSla === 'DENTRO DO SLA' || t.statusSla === 'FORA DO SLA'; });
         return list.filter(function (t) { return t.statusSla === (lado3 === 'fora' ? 'FORA DO SLA' : 'DENTRO DO SLA'); });
       }
+      case 'gmg': return sortRegiaoP(D.dedupPorTsk(tickets).filter(function (t) {
+        var s = (t.status || '').trim().toUpperCase();
+        if (s !== 'NÃO INICIADO' && s !== 'NAO INICIADO' && s !== 'INICIADO') return false;
+        return (t.habilidadeTrabalho || '').toUpperCase().indexOf('GMG') >= 0;
+      }));
       case 'atividades': return manuais.filter(function (t) { return D.categoriaManual(t.tipoAtividade) === arg; });
       case 'cancelCorretiva': {
         var canceladasDrill = tickets.filter(function (t) {
