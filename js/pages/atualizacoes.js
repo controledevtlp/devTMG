@@ -66,7 +66,7 @@
   var RE_TLP_A    = /TLP-T\d+-([^-\r\n]{3,60}?)\s*-\s*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)/g;
   var RE_DTNAME_A = /(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}(?::\d{2})?)\s*-\s*([^\r\n]{5,80})/g;
   var RE_TS_A     = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?|\d{4}[\/\-]\d{2}[\/\-]\d{2}\s+\d{1,2}:\d{2}(?::\d{2})?|\d{1,2}[\/\-]\d{1,2}\s+\d{1,2}:\d{2}(?::\d{2})?|\d{1,2}:\d{2}(?::\d{2})?)/g;
-  var RE_BOT_A = /^(?:MONITOR\s*CCI|WFM\s*Agent|isoc_fixa|[Aa]utoma[çc][aã]o|Sistema\s*autom|System\b|Raio-X|dsoc_[a-z_]|taischatbot|\w+chatbot)/i;
+  var RE_BOT_A = /^(?:MONITOR\s*CCI|WFM\s*Agent|isoc_fixa|[Aa]utoma[çc][aã]o|Sistema\s*autom|System|Tentativa\s+\d+|Raio-X|dsoc_[a-z_]|taischatbot|\w+chatbot)/i;
 
   function parseTlpEntriesA(texto) {
     if (!texto) return [];
@@ -107,6 +107,30 @@
     return entries.sort(function (a, b) { return a.dt - b.dt; });
   }
 
+  // Extrai datas/horas de cada evento "Tentativa N – Modo de validação" no diário.
+  function extrairRetornosAlarmeDts(bg) {
+    if (!bg) return [];
+    var texto = bg.toString();
+    var RE_TENT = /TENTATIVA\s+\d+\s*[–\-]\s*MODO DE VALIDA[ÇC][AÃ]O/gi;
+    var RE_DT   = /(\d{2}\/\d{2}\/\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/g;
+    var dts = [], m;
+    RE_TENT.lastIndex = 0;
+    while ((m = RE_TENT.exec(texto)) !== null) {
+      var before = texto.substring(0, m.index);
+      RE_DT.lastIndex = 0;
+      var tsM = null, tsMt;
+      while ((tsMt = RE_DT.exec(before)) !== null) tsM = tsMt;
+      if (tsM) {
+        var pts = tsM[0].match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+        if (pts) {
+          var dt = new Date(+pts[3], +pts[2]-1, +pts[1], +pts[4], +pts[5], pts[6]?+pts[6]:0);
+          if (!isNaN(dt.getTime())) dts.push(dt);
+        }
+      }
+    }
+    return dts;
+  }
+
   // ── Formatação ────────────────────────────────────────────────────
   function fmtHM(dt) {
     return ('0' + dt.getHours()).slice(-2) + ':' + ('0' + dt.getMinutes()).slice(-2);
@@ -137,17 +161,43 @@
     var totalEntradas = 0;
     var authorCount = {};
     var hourCount = new Array(24).fill(0);
+    var hourCountEntrantes = new Array(24).fill(0);
+    var hourCountRetorno   = new Array(24).fill(0);
+    var retornosTasks = [];
+    var retornosPerSite = {};
+    var siteCount = {};
+
+    (tasks || []).forEach(function (t) {
+      var sk = (t.enderecoId || '').toString().trim().toUpperCase();
+      if (!sk) return;
+      if (!siteCount[sk]) siteCount[sk] = { site: t.site || sk, enderecoId: t.enderecoId || sk, siteId: t.siteId || '', regiao: t.regiao || '', count: 0 };
+      siteCount[sk].count++;
+      if (!siteCount[sk].siteId && t.siteId) siteCount[sk].siteId = t.siteId;
+      if (!siteCount[sk].regiao && t.regiao) siteCount[sk].regiao = t.regiao;
+    });
 
     (tasks || []).forEach(function (t) {
       var entries = parseTlpEntriesA(t.motivoCancelamento || '');
       if (!entries.length) { semDiario++; return; }
 
       totalEntradas += entries.length;
+      hourCountEntrantes[entries[0].dt.getHours()]++;
       entries.forEach(function (e) {
         hourCount[e.dt.getHours()]++;
         var a = e.author || 'Sistema';
         authorCount[a] = (authorCount[a] || 0) + 1;
       });
+
+      var retDts = extrairRetornosAlarmeDts(t.motivoCancelamento || '');
+      retDts.forEach(function (dt) {
+        hourCountRetorno[dt.getHours()]++;
+        var sk2 = (t.enderecoId || '').toString().trim().toUpperCase();
+        if (sk2) {
+          if (!retornosPerSite[sk2]) retornosPerSite[sk2] = [];
+          retornosPerSite[sk2].push({ dt: dt, osNumero: t.osNumero || '?' });
+        }
+      });
+      if (retDts.length > 0) retornosTasks.push({ task: t, count: retDts.length, dts: retDts });
 
       var gaps = [];
       for (var i = 1; i < entries.length; i++) {
@@ -217,14 +267,58 @@
 
     stats.sort(function (a, b) { return b.horasSemUpd - a.horasSemUpd; });
 
+    var topSites = Object.keys(siteCount)
+      .map(function (k) { return siteCount[k]; })
+      .sort(function (a, b) { return b.count - a.count; })
+      .slice(0, 30);
+
+    retornosTasks.sort(function (a, b) { return b.count - a.count; });
+
     return {
       stats: stats, semDiario: semDiario, totalEntradas: totalEntradas,
       allGaps: allGaps, avgGapH: avgGapGlobal, mediana: mediana,
       topAuthors: topAuthors, hourCount: hourCount,
+      hourCountEntrantes: hourCountEntrantes, hourCountRetorno: hourCountRetorno,
+      retornosTasks: retornosTasks,
+      retornosPerSite: retornosPerSite,
+      topSites: topSites,
       authorOSmap: authorOSmapArr,
       todayAuthors: todayAuthors,
       todayAuthorOSmap: todayOSmapArr
     };
+  }
+
+  // ── Gráfico: entrantes normais vs retornos por alarme por hora ────
+  function chartEntrantes(canvas, hourCountEntrantes, hourCountRetorno) {
+    var labels = [];
+    for (var i = 0; i < 24; i++) labels.push(('0' + i).slice(-2) + 'h');
+    var totals = hourCountEntrantes.map(function (v, i) { return v + (hourCountRetorno[i] || 0); });
+    var maxTotal = Math.max.apply(null, totals.concat([0]));
+    var peakHour = maxTotal > 0 ? totals.indexOf(maxTotal) : -1;
+    var normalBg  = hourCountEntrantes.map(function (_, i) { return i === peakHour ? 'rgba(255,140,0,0.92)' : 'rgba(255,140,0,0.15)'; });
+    var retornoBg = hourCountRetorno.map(function (_, i)   { return i === peakHour ? 'rgba(231,76,60,0.92)'  : 'rgba(231,76,60,0.15)';  });
+    var c = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Entrantes Normais', data: hourCountEntrantes, backgroundColor: normalBg,  borderRadius: 3, maxBarThickness: 18 },
+          { label: 'Retorno por Alarme', data: hourCountRetorno,  backgroundColor: retornoBg, borderRadius: 3, maxBarThickness: 18 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { ticks: { color: tickClr(), font: { size: 9 } }, grid: { color: gridClr() } },
+          y: { ticks: { color: tickClr(), font: { size: 11 } }, grid: { color: gridClr() }, beginAtZero: true }
+        },
+        plugins: {
+          legend: { display: true, labels: { color: tickClr(), font: { size: 10 }, boxWidth: 10, padding: 10 } },
+          tooltip: TOOLTIP_STYLE
+        }
+      }
+    });
+    _charts.push(c); return c;
   }
 
   // ── Gráfico: distribuição de intervalos + média por OS ────────────
@@ -398,13 +492,18 @@
   // ── Gráfico: atividade por hora ───────────────────────────────────
   function chartHoras(canvas, hourCount) {
     var comercial = function (i) { return i >= 7 && i <= 21; };
+    var maxH = Math.max.apply(null, hourCount.concat([0]));
+    var bgColors = hourCount.map(function (v, i) {
+      if (maxH > 0 && v === maxH) return comercial(i) ? 'rgba(255,140,0,0.92)' : 'rgba(231,76,60,0.88)';
+      return comercial(i) ? 'rgba(255,140,0,0.14)' : 'rgba(231,76,60,0.12)';
+    });
     var c = new Chart(canvas, {
       type: 'bar',
       data: {
         labels: Array.from({ length: 24 }, function (_, i) { return ('0' + i).slice(-2) + 'h'; }),
         datasets: [{
           label: 'Atualizações', data: hourCount,
-          backgroundColor: hourCount.map(function (_, i) { return comercial(i) ? 'rgba(255,140,0,0.75)' : 'rgba(231,76,60,0.65)'; }),
+          backgroundColor: bgColors,
           borderRadius: 3, maxBarThickness: 30
         }]
       },
@@ -710,7 +809,7 @@
       // ── Gráficos ──────────────────────────────────────────────────
       areaEl.appendChild(secTitle('ANÁLISE DE INTERVALOS', '#ff8c00'));
       var row1 = h('div', { class: 'grid gap-4 mb-4', style: { gridTemplateColumns: '1fr 1fr' } });
-      var ccHist = U.chartCard('DISTRIBUIÇÃO DE INTERVALOS — INDIVIDUAL E MÉDIA POR OS', { hint: 'barras coloridas = intervalos individuais · azul = média por OS' });
+      var ccHist = U.chartCard('ENTRANTES POR HORA — NORMAIS VS RETORNO POR ALARME', { hint: 'laranja = entrantes normais · vermelho = retornou à fila por alarme' });
       ccHist.card.style.minHeight = '240px';
       row1.appendChild(ccHist.card);
       row1.appendChild(buildRankingCard(result));
@@ -738,10 +837,118 @@
       }
 
       setTimeout(function () {
-        if (result.allGaps.length) chartHistograma(ccHist.canvas, result.allGaps, s);
+        chartEntrantes(ccHist.canvas, result.hourCountEntrantes, result.hourCountRetorno);
         if (result.topAuthors.length) chartAutores(ccAuth.canvas, result.topAuthors, result.authorOSmap);
         chartHoras(ccHora.canvas, result.hourCount);
       }, 0);
+
+      // ── RETORNO POR ALARME ────────────────────────────────────────────
+      var retList = result.retornosTasks || [];
+      var retornosPerSite = result.retornosPerSite || {};
+      areaEl.appendChild(secTitle('RETORNO POR ALARME — TSKs QUE VOLTARAM À FILA (' + retList.length + ')', '#e74c3c'));
+      if (!retList.length) {
+        areaEl.appendChild(h('div', { class: 'tmg-card p-4', style: { color: 'var(--tmg-muted)', fontSize: '13px', textAlign: 'center' } },
+          [h('span', { text: 'Nenhuma TSK com retorno por alarme no período selecionado.' })]));
+      } else {
+        areaEl.appendChild(h('div', { style: { color: 'var(--tmg-muted)', fontSize: '12px', marginBottom: '10px' } },
+          [h('span', { text: retList.length + ' TSK(s) retornaram à fila automaticamente após encerramento com alarme presente. Clique para ver a timeline.' })]));
+
+        var retRegiaoMap = {};
+        retList.forEach(function (item) {
+          var rg = (item.task.regiao || 'SEM REGIÃO').toString().trim().toUpperCase();
+          if (!retRegiaoMap[rg]) retRegiaoMap[rg] = [];
+          retRegiaoMap[rg].push(item);
+        });
+        var retRegioes = Object.keys(retRegiaoMap).sort(function (a, b) { return retRegiaoMap[b].length - retRegiaoMap[a].length; });
+        if (retRegioes.length > 1) {
+          var retRgMax = retRegiaoMap[retRegioes[0]].length;
+          var retRgCard = h('div', { class: 'tmg-card p-3 mb-3' });
+          retRgCard.appendChild(h('div', { style: { fontSize: '11px', fontWeight: '600', color: 'var(--tmg-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '.05em' }, text: 'Volume por Região' }));
+          retRegioes.forEach(function (rg) {
+            var rgItems = retRegiaoMap[rg];
+            var barW = Math.round(rgItems.length / retRgMax * 100);
+            var rgRow = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 4px', cursor: 'pointer', borderRadius: '4px' } });
+            rgRow.appendChild(h('span', { style: { width: '140px', fontSize: '11px', color: 'var(--tmg-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, text: rg }));
+            rgRow.appendChild(h('div', { style: { flex: '1', background: 'rgba(255,255,255,0.07)', borderRadius: '3px', height: '8px', overflow: 'hidden' } }, [
+              h('div', { style: { width: barW + '%', height: '100%', background: '#e74c3c', borderRadius: '3px' } })
+            ]));
+            rgRow.appendChild(h('span', { style: { fontSize: '11px', color: '#e74c3c', fontWeight: '700', minWidth: '28px', textAlign: 'right' }, text: String(rgItems.length) }));
+            rgRow.appendChild(h('span', { style: { fontSize: '12px', color: 'var(--tmg-muted)', paddingLeft: '4px' }, text: '›' }));
+            rgRow.addEventListener('mouseenter', function () { rgRow.style.background = 'rgba(231,76,60,0.06)'; });
+            rgRow.addEventListener('mouseleave', function () { rgRow.style.background = ''; });
+            rgRow.addEventListener('click', (function (rgLabel, rgItems2) { return function () {
+              var wrap = h('div', { style: { maxHeight: '60vh', overflowY: 'auto' } });
+              rgItems2.forEach(function (item2) {
+                var t2 = item2.task;
+                var st2 = s.find(function (x) { return x.task === t2; });
+                var rowM = h('div', {
+                  style: { display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: st2 ? 'pointer' : 'default' },
+                  onclick: st2 ? function () { abrirTimeline(st2); } : null
+                }, [
+                  h('span', { style: { color: '#ff8c00', fontWeight: '700', fontSize: '12px', minWidth: '130px' }, text: t2.osNumero || '—' }),
+                  h('span', { style: { color: 'var(--tmg-muted)', fontSize: '11px', flex: '1' }, text: String(t2.enderecoId || '—') }),
+                  h('span', { style: { color: '#e74c3c', fontWeight: '700' }, text: String(item2.count) + 'x' })
+                ]);
+                if (st2) { rowM.addEventListener('mouseenter', function () { rowM.style.background = 'rgba(255,140,0,0.06)'; }); rowM.addEventListener('mouseleave', function () { rowM.style.background = ''; }); }
+                wrap.appendChild(rowM);
+              });
+              U.openModal('Retornos por Alarme — ' + rgLabel + ' (' + rgItems2.length + ')', wrap);
+            }; })(rg, rgItems));
+            retRgCard.appendChild(rgRow);
+          });
+          areaEl.appendChild(retRgCard);
+        }
+
+        var tblRet = h('div', { class: 'tmg-card', style: { overflowX: 'auto' } });
+        var tableRet = h('table', { style: { width: '100%', fontSize: '12px', borderCollapse: 'collapse' } });
+        var theadRet = h('thead', {});
+        theadRet.appendChild(h('tr', {
+          style: { borderBottom: '1px solid rgba(231,76,60,0.3)', color: 'var(--tmg-muted)', textAlign: 'left', fontSize: '11px' }
+        }, [
+          h('th', { style: { padding: '8px 12px', fontWeight: '600' }, text: 'OS' }),
+          h('th', { style: { padding: '8px 12px', fontWeight: '600' }, text: 'END ID' }),
+          h('th', { style: { padding: '8px 12px', fontWeight: '600' }, text: 'Site' }),
+          h('th', { style: { padding: '8px 12px', fontWeight: '600' }, text: 'Tipo de Falha / Status' }),
+          h('th', { style: { padding: '8px 12px', fontWeight: '600', textAlign: 'center' }, text: 'Retornos' }),
+          h('th', { style: { padding: '8px 12px' } })
+        ]));
+        tableRet.appendChild(theadRet);
+        var tbodyRet = h('tbody', {});
+        retList.forEach(function (item) {
+          var t = item.task;
+          var st = s.find(function (x) { return x.task === t; });
+          var statusTxt = t.tipoFalha || t.status || '—';
+          var stUp = (t.status || '').trim().toUpperCase();
+          var badgeCor, badgeBg;
+          if (stUp === 'INICIADO') { badgeCor = '#1fae5e'; badgeBg = 'rgba(31,174,94,.18)'; }
+          else if (stUp.indexOf('NÃO') >= 0 || stUp === 'NAO INICIADO') { badgeCor = '#9a7d00'; badgeBg = 'rgba(241,196,15,.22)'; }
+          else if (stUp.indexOf('CONCLU') >= 0) { badgeCor = '#5b7ed6'; badgeBg = 'rgba(91,126,214,.2)'; }
+          else { badgeCor = 'var(--tmg-muted)'; badgeBg = 'rgba(255,255,255,0.07)'; }
+          var trRow = h('tr', {
+            style: { borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer' },
+            onclick: function () { if (st) abrirTimeline(st); }
+          }, [
+            h('td', { style: { padding: '8px 12px', color: '#ff8c00', fontWeight: '600' }, text: t.osNumero || '—' }),
+            h('td', { style: { padding: '8px 12px', color: 'var(--tmg-muted)', fontSize: '11px' }, text: String(t.enderecoId || '—') }),
+            h('td', { style: { padding: '8px 12px', color: 'var(--tmg-muted)', fontSize: '11px' }, text: String(t.siteId || '—') }),
+            h('td', { style: { padding: '8px 12px' } }, [
+              h('span', { style: { background: badgeBg, color: badgeCor, fontWeight: '700', padding: '2px 7px', borderRadius: '5px', fontSize: '11px' }, text: statusTxt })
+            ]),
+            h('td', { style: { padding: '8px 12px', textAlign: 'center', color: '#e74c3c', fontWeight: '700', fontSize: '15px' }, text: String(item.count) }),
+            h('td', { style: { padding: '8px 12px' } }, [
+              h('button', { class: 'tmg-btn tmg-btn-ghost', style: { fontSize: '10px', padding: '2px 8px' },
+                text: 'Timeline',
+                onclick: function (e) { e.stopPropagation(); if (st) abrirTimeline(st); } })
+            ])
+          ]);
+          trRow.addEventListener('mouseenter', function () { trRow.style.background = 'rgba(231,76,60,0.05)'; });
+          trRow.addEventListener('mouseleave', function () { trRow.style.background = ''; });
+          tbodyRet.appendChild(trRow);
+        });
+        tableRet.appendChild(tbodyRet);
+        tblRet.appendChild(tableRet);
+        areaEl.appendChild(tblRet);
+      }
 
       // ── OSs ABERTAS (somente Não iniciado / Iniciado) ─────────────
       areaEl.appendChild(secTitle('OSs ABERTAS — TEMPO SEM ATUALIZAÇÃO', '#e74c3c'));
@@ -757,6 +964,51 @@
         areaEl.appendChild(h('div', { class: 'tmg-card p-5 text-center', style: { color: 'var(--tmg-muted)', fontSize: '13px' },
           text: 'Nenhuma OS com status "Não iniciado" ou "Iniciado" e diário preenchido encontrada.' }));
       } else {
+        var abRegiaoMap = {};
+        riskRows.forEach(function (st) {
+          var rg = (st.task.regiao || 'SEM REGIÃO').toString().trim().toUpperCase();
+          if (!abRegiaoMap[rg]) abRegiaoMap[rg] = [];
+          abRegiaoMap[rg].push(st);
+        });
+        var abRegioes = Object.keys(abRegiaoMap).sort(function (a, b) { return abRegiaoMap[b].length - abRegiaoMap[a].length; });
+        if (abRegioes.length > 1) {
+          var abRgMax = abRegiaoMap[abRegioes[0]].length;
+          var abRgCard = h('div', { class: 'tmg-card p-3 mb-3' });
+          abRgCard.appendChild(h('div', { style: { fontSize: '11px', fontWeight: '600', color: 'var(--tmg-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '.05em' }, text: 'Volume por Região' }));
+          abRegioes.forEach(function (rg) {
+            var abSts = abRegiaoMap[rg];
+            var barW = Math.round(abSts.length / abRgMax * 100);
+            var abRow = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 4px', cursor: 'pointer', borderRadius: '4px' } });
+            abRow.appendChild(h('span', { style: { width: '140px', fontSize: '11px', color: 'var(--tmg-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, text: rg }));
+            abRow.appendChild(h('div', { style: { flex: '1', background: 'rgba(255,255,255,0.07)', borderRadius: '3px', height: '8px', overflow: 'hidden' } }, [
+              h('div', { style: { width: barW + '%', height: '100%', background: '#e74c3c', borderRadius: '3px' } })
+            ]));
+            abRow.appendChild(h('span', { style: { fontSize: '11px', color: '#e74c3c', fontWeight: '700', minWidth: '28px', textAlign: 'right' }, text: String(abSts.length) }));
+            abRow.appendChild(h('span', { style: { fontSize: '12px', color: 'var(--tmg-muted)', paddingLeft: '4px' }, text: '›' }));
+            abRow.addEventListener('mouseenter', function () { abRow.style.background = 'rgba(231,76,60,0.06)'; });
+            abRow.addEventListener('mouseleave', function () { abRow.style.background = ''; });
+            abRow.addEventListener('click', (function (rgLabel, abSts2) { return function () {
+              var wrap = h('div', { style: { maxHeight: '60vh', overflowY: 'auto' } });
+              abSts2.forEach(function (st2) {
+                var rowM = h('div', {
+                  style: { display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' },
+                  onclick: function () { abrirTimeline(st2); }
+                }, [
+                  h('span', { style: { color: '#ff8c00', fontWeight: '700', fontSize: '12px', minWidth: '130px' }, text: st2.task.osNumero || '—' }),
+                  h('span', { style: { color: 'var(--tmg-muted)', fontSize: '11px', flex: '1' }, text: String(st2.task.enderecoId || '—') }),
+                  h('span', { style: { fontSize: '11px', color: st2.horasSemUpd > 8 ? '#e74c3c' : st2.horasSemUpd > 4 ? '#f39c12' : 'var(--tmg-muted)' }, text: fmtGap(st2.horasSemUpd) + ' atrás' })
+                ]);
+                rowM.addEventListener('mouseenter', function () { rowM.style.background = 'rgba(255,140,0,0.06)'; });
+                rowM.addEventListener('mouseleave', function () { rowM.style.background = ''; });
+                wrap.appendChild(rowM);
+              });
+              U.openModal('OSs Abertas — ' + rgLabel + ' (' + abSts2.length + ')', wrap);
+            }; })(rg, abSts));
+            abRgCard.appendChild(abRow);
+          });
+          areaEl.appendChild(abRgCard);
+        }
+
         var tbl = h('div', { class: 'tmg-card', style: { overflowX: 'auto' } });
         var table = h('table', { style: { width: '100%', fontSize: '12px', borderCollapse: 'collapse' } });
         var thead = h('thead', {});
@@ -820,6 +1072,91 @@
           })
         ]));
       }
+
+      // ── TOP OFENSOR — SITES COM MAIOR REINCIDÊNCIA ───────────────────
+      var topSites = result.topSites || [];
+      areaEl.appendChild(secTitle('TOP OFENSOR — SITES COM MAIOR REINCIDÊNCIA', '#9b59b6'));
+      (function () {
+        var searchInput = h('input', {
+          placeholder: 'Filtrar por NE ID ou END ID...',
+          style: { width: '100%', maxWidth: '360px', marginBottom: '12px', padding: '6px 10px',
+                   fontSize: '12px', background: 'var(--tmg-card)', color: 'var(--tmg-fg)',
+                   border: '1px solid rgba(155,89,182,0.4)', borderRadius: '6px' }
+        });
+        areaEl.appendChild(searchInput);
+        var siteTblWrap = h('div', { class: 'tmg-card', style: { overflowX: 'auto' } });
+        function renderSiteTable(filter) {
+          siteTblWrap.innerHTML = '';
+          var filtered = (filter ? topSites.filter(function (s2) {
+            var q = filter.toUpperCase();
+            return (s2.siteId || '').toString().toUpperCase().indexOf(q) >= 0 ||
+                   (s2.enderecoId || '').toString().toUpperCase().indexOf(q) >= 0;
+          }) : topSites).slice(0, 20);
+          if (!filtered.length) {
+            siteTblWrap.appendChild(h('div', { style: { color: 'var(--tmg-muted)', fontSize: '12px', padding: '16px' }, text: 'Nenhum site encontrado.' }));
+            return;
+          }
+          var maxCount = filtered[0] ? filtered[0].count : 1;
+          var tblS = h('table', { style: { width: '100%', fontSize: '12px', borderCollapse: 'collapse' } });
+          var thS = h('thead', {});
+          thS.appendChild(h('tr', {
+            style: { borderBottom: '1px solid rgba(155,89,182,0.3)', color: 'var(--tmg-muted)', textAlign: 'left', fontSize: '11px' }
+          }, [
+            h('th', { style: { padding: '8px 12px', fontWeight: '600', width: '32px' }, text: '#' }),
+            h('th', { style: { padding: '8px 12px', fontWeight: '600' }, text: 'NE ID' }),
+            h('th', { style: { padding: '8px 12px', fontWeight: '600' }, text: 'END ID' }),
+            h('th', { style: { padding: '8px 12px', fontWeight: '600', textAlign: 'center' }, text: 'OSs' }),
+            h('th', { style: { padding: '8px 12px', fontWeight: '600' }, text: 'Reincidência' }),
+            h('th', { style: { padding: '8px 12px', fontWeight: '600' }, text: 'Retornos' })
+          ]));
+          tblS.appendChild(thS);
+          var tbS = h('tbody', {});
+          filtered.forEach(function (site, idx) {
+            var barPct = Math.round(site.count / maxCount * 100);
+            var cor = idx === 0 ? '#e74c3c' : idx < 3 ? '#e67e22' : '#9b59b6';
+            var sk3 = (site.enderecoId || '').toString().trim().toUpperCase();
+            var siteDts = retornosPerSite[sk3] || [];
+            var row = h('tr', { style: { borderBottom: '1px solid rgba(255,255,255,0.04)' } }, [
+              h('td', { style: { padding: '8px 12px', color: 'var(--tmg-muted)', fontWeight: '600' }, text: String(idx + 1) }),
+              h('td', { style: { padding: '8px 12px', color: '#ff8c00', fontWeight: '600' }, text: String(site.siteId || '—') }),
+              h('td', { style: { padding: '8px 12px', color: 'var(--tmg-muted)', fontSize: '11px' }, text: String(site.enderecoId || '—') }),
+              h('td', { style: { padding: '8px 12px', textAlign: 'center', fontWeight: '700', color: cor }, text: String(site.count) }),
+              h('td', { style: { padding: '8px 12px', minWidth: '120px' } }, [
+                h('div', { style: { background: 'rgba(255,255,255,0.08)', borderRadius: '4px', height: '8px', overflow: 'hidden' } }, [
+                  h('div', { style: { width: barPct + '%', height: '100%', background: cor, borderRadius: '4px', transition: 'width .3s' } })
+                ])
+              ]),
+              h('td', { style: { padding: '8px 12px' } }, siteDts.length ? [
+                h('button', {
+                  class: 'tmg-btn tmg-btn-ghost',
+                  style: { fontSize: '10px', padding: '2px 8px' },
+                  text: siteDts.length + ' retorno(s)',
+                  onclick: (function (dts, eid) { return function (e) {
+                    e.stopPropagation();
+                    var wrap = h('div', { style: { maxHeight: '50vh', overflowY: 'auto' } });
+                    var sortedDts = dts.slice().sort(function (a, b) { return b.dt - a.dt; });
+                    sortedDts.forEach(function (d) {
+                      wrap.appendChild(h('div', {
+                        style: { padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '12px', display: 'flex', gap: '10px', alignItems: 'center' }
+                      }, [
+                        h('span', { style: { color: '#ff8c00', fontWeight: '600', minWidth: '130px' }, text: d.osNumero }),
+                        h('span', { style: { color: 'var(--tmg-muted)' }, text: fmtDDMM(d.dt) + ' às ' + fmtHM(d.dt) })
+                      ]));
+                    });
+                    U.openModal('Retornos por Alarme — ' + eid, wrap);
+                  }; })(siteDts, site.enderecoId || sk3)
+                })
+              ] : [h('span', { style: { color: 'var(--tmg-muted)', fontSize: '11px' }, text: '—' })])
+            ]);
+            tbS.appendChild(row);
+          });
+          tblS.appendChild(tbS);
+          siteTblWrap.appendChild(tblS);
+        }
+        renderSiteTable('');
+        searchInput.oninput = function () { renderSiteTable(searchInput.value.trim()); };
+        areaEl.appendChild(siteTblWrap);
+      })();
     }
 
     render();
