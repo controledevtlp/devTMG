@@ -85,6 +85,7 @@
       var p2 = m[1].trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
       if (!p2) continue;
       // Descarta entradas cujo conteúdo imediato é formulário de sistema
+      // (flag GMG por usuário humano, tramitação, retorno por alarme, etc.)
       var _posA = m.index + m[0].length;
       var _reProxA = new RegExp(RE_TS_A.source);
       var _mProxA = _reProxA.exec(texto.substring(_posA));
@@ -167,6 +168,7 @@
     var retornosPerSite = {};
     var siteCount = {};
 
+    // Contagem por site — todas as tasks (com e sem diário)
     (tasks || []).forEach(function (t) {
       var sk = (t.enderecoId || '').toString().trim().toUpperCase();
       if (!sk) return;
@@ -181,6 +183,7 @@
       if (!entries.length) { semDiario++; return; }
 
       totalEntradas += entries.length;
+      // Primeira entrada do diário ≈ horário de entrada da task na fila
       hourCountEntrantes[entries[0].dt.getHours()]++;
       entries.forEach(function (e) {
         hourCount[e.dt.getHours()]++;
@@ -188,6 +191,7 @@
         authorCount[a] = (authorCount[a] || 0) + 1;
       });
 
+      // Retornos por alarme (API Netcool)
       var retDts = extrairRetornosAlarmeDts(t.motivoCancelamento || '');
       retDts.forEach(function (dt) {
         hourCountRetorno[dt.getHours()]++;
@@ -288,20 +292,24 @@
     };
   }
 
-  // ── Utilitário: copiar texto ──────────────────────────────────────
+  // ── Utilitário: copiar texto (mesma lógica do dashboard) ─────────
   function copyText(txt) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(txt).then(function () { U.toast('✓ Copiado!', 'ok'); }).catch(function () { _fbCopy(txt); });
+      navigator.clipboard.writeText(txt)
+        .then(function () { U.toast('✓ Copiado!', 'ok'); })
+        .catch(function () { _fbCopy(txt); });
     } else { _fbCopy(txt); }
     function _fbCopy(s) {
       var ta = document.createElement('textarea');
       ta.value = s; ta.style.position = 'fixed'; ta.style.opacity = '0';
       document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); U.toast('✓ Copiado!', 'ok'); } catch (e) { U.toast('Não foi possível copiar.', 'err'); }
+      try { document.execCommand('copy'); U.toast('✓ Copiado!', 'ok'); }
+      catch (e) { U.toast('Não foi possível copiar.', 'err'); }
       document.body.removeChild(ta);
     }
   }
 
+  // ── Helper: badge de status ───────────────────────────────────────
   function statusBadge(statusStr) {
     var stUp = (statusStr || '').trim().toUpperCase();
     var cor, bg;
@@ -343,72 +351,12 @@
         onClick: function (ev, els) {
           if (!els || !els.length || !stats) return;
           var hrIdx = els[0].index;
-          var tasksHr = stats.filter(function (st) { return st.entries.some(function (e) { return e.dt.getHours() === hrIdx; }); });
+          var hrLabel = labels[hrIdx];
+          var tasksHr = stats.filter(function (st) {
+            return st.entries.some(function (e) { return e.dt.getHours() === hrIdx; });
+          });
           if (!tasksHr.length) return;
-          abrirDrilldownHora(labels[hrIdx] + ' — Entrantes / Retornos', tasksHr);
-        }
-      }
-    });
-    _charts.push(c); return c;
-  }
-
-  // ── Gráfico: distribuição de intervalos + média por OS ────────────
-  function chartHistograma(canvas, allGaps, stats) {
-    var buckets = [
-      { label: '< 30min',  min: 0,   max: 0.5,      cor: '#2ecc71' },
-      { label: '30–60min', min: 0.5, max: 1,         cor: '#27ae60' },
-      { label: '1–2h',     min: 1,   max: 2,         cor: '#3498db' },
-      { label: '2–4h',     min: 2,   max: 4,         cor: '#f39c12' },
-      { label: '4–8h',     min: 4,   max: 8,         cor: '#e67e22' },
-      { label: '8–24h',    min: 8,   max: 24,        cor: '#e74c3c' },
-      { label: '> 24h',    min: 24,  max: Infinity,  cor: '#c0392b' }
-    ];
-
-    var gapCounts = buckets.map(function () { return 0; });
-    allGaps.forEach(function (g) {
-      for (var i = 0; i < buckets.length; i++) {
-        if (g >= buckets[i].min && g < buckets[i].max) { gapCounts[i]++; break; }
-      }
-    });
-
-    var avgCounts = buckets.map(function () { return 0; });
-    (stats || []).forEach(function (s) {
-      if (s.avgGapH === null) return;
-      for (var i = 0; i < buckets.length; i++) {
-        if (s.avgGapH >= buckets[i].min && s.avgGapH < buckets[i].max) { avgCounts[i]++; break; }
-      }
-    });
-
-    var c = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: buckets.map(function (b) { return b.label; }),
-        datasets: [
-          {
-            label: 'Intervalos individuais',
-            data: gapCounts,
-            backgroundColor: buckets.map(function (b) { return b.cor; }),
-            borderRadius: 4, maxBarThickness: 32
-          },
-          {
-            label: 'Média por OS',
-            data: avgCounts,
-            backgroundColor: 'rgba(52,152,219,0.45)',
-            borderColor: 'rgba(52,152,219,0.8)',
-            borderWidth: 1,
-            borderRadius: 4, maxBarThickness: 32
-          }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        scales: {
-          x: { ticks: { color: tickClr(), font: { size: 10 } }, grid: { color: gridClr() } },
-          y: { ticks: { color: tickClr(), font: { size: 11 } }, grid: { color: gridClr() }, beginAtZero: true }
-        },
-        plugins: {
-          legend: { display: true, labels: { color: tickClr(), font: { size: 10 }, boxWidth: 10, padding: 10 } },
-          tooltip: TOOLTIP_STYLE
+          abrirDrilldownHora(hrLabel + ' — Entrantes / Retornos', tasksHr);
         }
       }
     });
@@ -423,6 +371,7 @@
     }
     var total = osEntries.reduce(function (s, x) { return s + x.count; }, 0);
     var wrap = h('div', { style: { maxHeight: '65vh', overflowY: 'auto' } });
+
     var topRow = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px 10px', borderBottom: '1px solid rgba(255,255,255,0.07)', gap: '8px' } });
     topRow.appendChild(h('span', { style: { fontSize: '12px', color: 'var(--tmg-muted)' }, text: total + ' atualização(ões) em ' + osEntries.length + ' OS' + (osEntries.length !== 1 ? 's' : '') }));
     var cpBtn = h('button', { class: 'tmg-btn tmg-btn-ghost', style: { fontSize: '10px', padding: '2px 8px' }, text: '📋 Copiar' });
@@ -436,9 +385,12 @@
     };
     topRow.appendChild(cpBtn);
     wrap.appendChild(topRow);
+
+    // Cabeçalho de colunas
     wrap.appendChild(h('div', { style: { display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 0.6fr 1fr auto', gap: '4px', padding: '5px 12px', borderBottom: '1px solid rgba(255,255,255,0.07)', fontSize: '10px', color: 'var(--tmg-muted)', fontWeight: '600', textTransform: 'uppercase' } }, [
       h('span', { text: 'TSK' }), h('span', { text: 'Site' }), h('span', { text: 'END ID' }), h('span', { text: 'Falha' }), h('span', { text: 'Qtd.' }), h('span', { text: 'Última Atualiz.' }), h('span', { text: '' })
     ]));
+
     osEntries.forEach(function (entry) {
       var st = entry.stat;
       var item = h('div', {
@@ -454,13 +406,20 @@
         h('span', { style: { color: 'var(--tmg-muted)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, text: String(st.task.enderecoId || '—') }),
         h('span', { style: { color: 'var(--tmg-muted)', fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }, text: st.task.tipoFalha || '—' }),
         h('span', { style: { fontSize: '11px', color: 'var(--tmg-fg)', fontWeight: '600', textAlign: 'center' }, text: entry.count + 'x' }),
-        h('span', { style: { color: 'var(--tmg-muted)', fontSize: '11px' }, text: entry.lastDt ? fmtDDMM(entry.lastDt) + ' ' + fmtHM(entry.lastDt) : '—' }),
-        h('button', { class: 'tmg-btn tmg-btn-ghost', style: { fontSize: '10px', padding: '2px 8px', flexShrink: '0' }, text: 'Timeline', onclick: function (e) { e.stopPropagation(); abrirTimeline(st); } })
+        h('span', { style: { color: 'var(--tmg-muted)', fontSize: '11px' },
+          text: entry.lastDt ? fmtDDMM(entry.lastDt) + ' ' + fmtHM(entry.lastDt) : '—' }),
+        h('button', {
+          class: 'tmg-btn tmg-btn-ghost',
+          style: { fontSize: '10px', padding: '2px 8px', flexShrink: '0' },
+          text: 'Timeline',
+          onclick: function (e) { e.stopPropagation(); abrirTimeline(st); }
+        })
       ]);
       item.addEventListener('mouseenter', function () { item.style.background = 'rgba(255,140,0,0.06)'; });
       item.addEventListener('mouseleave', function () { item.style.background = ''; });
       wrap.appendChild(item);
     });
+
     U.openModal(authorName + ' — OSs atualizadas (' + osEntries.length + ')', wrap);
   }
 
@@ -535,13 +494,17 @@
     var copyBtn = h('button', { class: 'tmg-btn tmg-btn-ghost', style: { fontSize: '10px', padding: '2px 8px', marginBottom: '8px' }, text: '📋 Copiar' });
     copyBtn.onclick = function () {
       var lines = ['TSK\tSITE\tEND ID\tSTATUS\tÚltima atualiz.'];
-      tasksHr.forEach(function (st) { lines.push([st.task.osNumero || '—', st.task.siteId || '—', st.task.enderecoId || '—', st.task.status || '—', fmtDDMM(st.lastDt) + ' ' + fmtHM(st.lastDt)].join('\t')); });
+      tasksHr.forEach(function (st) {
+        lines.push([st.task.osNumero || '—', st.task.siteId || '—', st.task.enderecoId || '—', st.task.status || '—', fmtDDMM(st.lastDt) + ' ' + fmtHM(st.lastDt)].join('\t'));
+      });
       copyText(lines.join('\n'));
     };
     wrap.appendChild(copyBtn);
-    wrap.appendChild(h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: '4px', padding: '6px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', color: 'var(--tmg-muted)', fontWeight: '600', textTransform: 'uppercase' } }, [
+    // Cabeçalho
+    var hdr = h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: '4px', padding: '6px 12px', borderBottom: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', color: 'var(--tmg-muted)', fontWeight: '600', textTransform: 'uppercase' } }, [
       h('span', { text: 'TSK' }), h('span', { text: 'Site' }), h('span', { text: 'END ID' }), h('span', { text: 'Status' }), h('span', { text: 'Última Atualiz.' }), h('span', { text: '' })
-    ]));
+    ]);
+    wrap.appendChild(hdr);
     tasksHr.forEach(function (st) {
       var row = h('div', {
         style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: '4px', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer', alignItems: 'center' },
@@ -577,7 +540,11 @@
       type: 'bar',
       data: {
         labels: labels,
-        datasets: [{ label: 'Atualizações', data: hourCount, backgroundColor: bgColors, borderRadius: 3, maxBarThickness: 30 }]
+        datasets: [{
+          label: 'Atualizações', data: hourCount,
+          backgroundColor: bgColors,
+          borderRadius: 3, maxBarThickness: 30
+        }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -589,9 +556,12 @@
         onClick: function (ev, els) {
           if (!els || !els.length || !stats) return;
           var hrIdx = els[0].index;
-          var tasksHr = stats.filter(function (st) { return st.entries.some(function (e) { return e.dt.getHours() === hrIdx; }); });
+          var hrLabel = labels[hrIdx];
+          var tasksHr = stats.filter(function (st) {
+            return st.entries.some(function (e) { return e.dt.getHours() === hrIdx; });
+          });
           if (!tasksHr.length) return;
-          abrirDrilldownHora(labels[hrIdx] + ' — Atualizações', tasksHr);
+          abrirDrilldownHora(hrLabel + ' — Atualizações', tasksHr);
         }
       }
     });
@@ -1017,6 +987,7 @@
         areaEl.appendChild(h('div', { class: 'tmg-card p-4', style: { color: 'var(--tmg-muted)', fontSize: '13px', textAlign: 'center' } },
           [h('span', { text: 'Nenhuma TSK com retorno por alarme no período selecionado.' })]));
       } else {
+        // Gráfico por região — lista completa somente no drilldown
         var retRegiaoMap = {};
         retList.forEach(function (item) {
           var rg = (item.task.regiao || 'SEM REGIÃO').toString().trim().toUpperCase();
@@ -1090,14 +1061,16 @@
       // ── OSs ABERTAS + TOP OFENSOR — lado a lado ───────────────────
       var rowAbOf = h('div', { class: 'grid gap-4 mb-4', style: { gridTemplateColumns: '1fr 1fr' } });
 
+      // ── OSs ABERTAS (somente Não iniciado / Iniciado) — apenas gráfico ─
       (function () {
         var riskRows = s.filter(function (st) {
           var up = (st.task.status || '').toUpperCase().trim();
           return up === 'INICIADO' || up === 'NÃO INICIADO' || up === 'NAO INICIADO';
         });
+
         var secAb = h('div', {});
         var titleAbRow = h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' } });
-        titleAbRow.appendChild(h('div', { class: 'flex items-center gap-2' }, [
+        titleAbRow.appendChild(h('div', { class: 'flex items-center gap-2', style: { borderBottom: 'none' } }, [
           h('span', { style: { width: '4px', height: '16px', borderRadius: '2px', background: '#e74c3c', display: 'inline-block' } }),
           h('span', { class: 'text-xs font-bold uppercase tracking-widest', style: { color: '#e74c3c' }, text: 'OSs ABERTAS — SEM ATUALIZAÇÃO' })
         ]));
@@ -1112,8 +1085,10 @@
         };
         titleAbRow.appendChild(copyAbBtn);
         secAb.appendChild(titleAbRow);
+
         if (!riskRows.length) {
-          secAb.appendChild(h('div', { class: 'tmg-card p-4 text-center', style: { color: 'var(--tmg-muted)', fontSize: '12px' }, text: 'Nenhuma OS com status "Não iniciado" ou "Iniciado" encontrada.' }));
+          secAb.appendChild(h('div', { class: 'tmg-card p-4 text-center', style: { color: 'var(--tmg-muted)', fontSize: '12px' },
+            text: 'Nenhuma OS com status "Não iniciado" ou "Iniciado" encontrada.' }));
         } else {
           var abRegiaoMap = {};
           riskRows.forEach(function (st) {
@@ -1152,11 +1127,13 @@
               };
               topRow2.appendChild(cpBtn2);
               wrap.appendChild(topRow2);
+              // Cabeçalho
               wrap.appendChild(h('div', { style: { display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 0.8fr 1fr 0.8fr 0.6fr 0.6fr auto', gap: '4px', padding: '5px 12px', borderBottom: '1px solid rgba(255,255,255,0.07)', fontSize: '10px', color: 'var(--tmg-muted)', fontWeight: '600', textTransform: 'uppercase' } }, [
                 h('span', { text: 'TSK' }), h('span', { text: 'Site' }), h('span', { text: 'END ID' }), h('span', { text: 'Prio.' }), h('span', { text: 'Última Atualiz.' }), h('span', { text: 'Sem Atualiz.' }), h('span', { text: 'Entradas' }), h('span', { text: 'Gap Med.' }), h('span', { text: '' })
               ]));
               abSts2.forEach(function (st2) {
-                var urgente2 = st2.horasSemUpd > 8, atencao2 = st2.horasSemUpd > 4;
+                var urgente2 = st2.horasSemUpd > 8;
+                var atencao2 = st2.horasSemUpd > 4;
                 var cor2 = urgente2 ? '#e74c3c' : atencao2 ? '#f39c12' : 'var(--tmg-muted)';
                 var rowBg2 = urgente2 ? 'rgba(231,76,60,0.05)' : atencao2 ? 'rgba(243,156,18,0.04)' : 'transparent';
                 var isPred2 = st2.task.statusSla === 'PREDITIVA' || st2.task.fonteSla === 'PREDITIVA';
@@ -1188,13 +1165,16 @@
           secAb.appendChild(abRgCard);
           if (s.length > riskRows.length) {
             secAb.appendChild(h('div', { style: { marginTop: '8px', textAlign: 'right' } }, [
-              h('button', { class: 'tmg-btn tmg-btn-ghost', style: { fontSize: '10px', padding: '2px 8px' }, text: 'Ver todas (' + s.length + ') incl. outros status', onclick: function () { mostrarTodasModal(s); } })
+              h('button', { class: 'tmg-btn tmg-btn-ghost', style: { fontSize: '10px', padding: '2px 8px' },
+                text: 'Ver todas (' + s.length + ') incl. outros status',
+                onclick: function () { mostrarTodasModal(s); } })
             ]));
           }
         }
         rowAbOf.appendChild(secAb);
       })();
 
+      // ── TOP OFENSOR — apenas gráfico de região, lista no drilldown ──
       (function () {
         var topSites = result.topSites || [];
         var secOf = h('div', {});
@@ -1208,12 +1188,14 @@
           var lines = ['#\tNE ID\tEND ID\tOSs\tRetornos'];
           topSites.slice(0, 20).forEach(function (site, idx) {
             var sk3 = (site.enderecoId || '').toString().trim().toUpperCase();
-            lines.push([idx + 1, site.siteId || '—', site.enderecoId || '—', site.count, (retornosPerSite[sk3] || []).length].join('\t'));
+            var siteDts = retornosPerSite[sk3] || [];
+            lines.push([idx + 1, site.siteId || '—', site.enderecoId || '—', site.count, siteDts.length || '0'].join('\t'));
           });
           copyText(lines.join('\n'));
         };
         titleOfRow.appendChild(copyOfBtn);
         secOf.appendChild(titleOfRow);
+
         if (!topSites.length) {
           secOf.appendChild(h('div', { class: 'tmg-card p-4 text-center', style: { color: 'var(--tmg-muted)', fontSize: '12px' }, text: 'Nenhum site com reincidência.' }));
         } else {
@@ -1221,7 +1203,8 @@
           topSites.forEach(function (site) {
             var rg = (site.regiao || 'SEM REGIÃO').toString().trim().toUpperCase();
             if (!ofRegiaoMap[rg]) ofRegiaoMap[rg] = { count: 0, sites: [] };
-            ofRegiaoMap[rg].count++; ofRegiaoMap[rg].sites.push(site);
+            ofRegiaoMap[rg].count++;
+            ofRegiaoMap[rg].sites.push(site);
           });
           var ofRegioes = Object.keys(ofRegiaoMap).sort(function (a, b) { return ofRegiaoMap[b].count - ofRegiaoMap[a].count; });
           var ofRgMax = ofRegiaoMap[ofRegioes[0]].count;
@@ -1248,12 +1231,14 @@
                 var lines3 = ['#\tNE ID\tEND ID\tOSs\tRetornos'];
                 entry2.sites.forEach(function (site2, i2) {
                   var sk4 = (site2.enderecoId || '').toString().trim().toUpperCase();
-                  lines3.push([i2 + 1, site2.siteId || '—', site2.enderecoId || '—', site2.count, (retornosPerSite[sk4] || []).length].join('\t'));
+                  var siteDts2 = retornosPerSite[sk4] || [];
+                  lines3.push([i2 + 1, site2.siteId || '—', site2.enderecoId || '—', site2.count, siteDts2.length].join('\t'));
                 });
                 copyText(lines3.join('\n'));
               };
               topRow3.appendChild(cpBtn3);
               wrap.appendChild(topRow3);
+              // Cabeçalho
               wrap.appendChild(h('div', { style: { display: 'grid', gridTemplateColumns: '28px 1fr 1fr 0.6fr 0.8fr 1fr', gap: '4px', padding: '5px 12px', borderBottom: '1px solid rgba(255,255,255,0.07)', fontSize: '10px', color: 'var(--tmg-muted)', fontWeight: '600', textTransform: 'uppercase' } }, [
                 h('span', { text: '#' }), h('span', { text: 'NE ID' }), h('span', { text: 'END ID' }), h('span', { text: 'OSs' }), h('span', { text: 'Reincid.' }), h('span', { text: 'Retornos' })
               ]));
