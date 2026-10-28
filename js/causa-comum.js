@@ -475,107 +475,135 @@
     CC.vendoDiagrama = true;
     box.innerHTML = '';
 
-    var colW = 224, rowH = 46, nodeW = 200, nodeH = 36, pad = 24;
+    var colW = 232, nodeW = 208, nodeHMin = 36, nodeHMax = 76, GAP = 8, pad = 32;
 
-    /* falhas: união de todos os idsFalha de suspects + pais */
+    function calcNodeH(id) {
+      var k = (ix.kids[id] || []).length;
+      return Math.min(nodeHMax, Math.max(nodeHMin, nodeHMin + Math.round(k * 1.5)));
+    }
+
     var falhaIds = {};
     if (res) {
       (res.suspeitos || []).forEach(function (s) { (s.idsFalha || []).forEach(function (id) { falhaIds[id] = 1; }); });
       (res.pais || []).forEach(function (s) { (s.idsFalha || []).forEach(function (id) { falhaIds[id] = 1; }); });
     }
 
-    var escala = 0.7, base = { w: 1, h: 1 }, svgEl = null;
-    var posMap = {};  /* id -> {x,y} em coords SVG, para focarNo */
-    var area = h('div', { class: 'cc-dg-area' });
+    var tx = 0, ty = 0, sc = 1, base = { w: 1, h: 1 }, inner = null;
+    var posMap = {}, nodeHMap = {};
+    var matchIds = [], matchTerm = '', matchIdx = -1, focoAtivo = false;
+    var cntBusca, inputBusca, area;
 
-    function sair() { if (PAN_OFF) PAN_OFF(); CC.vendoDiagrama = false; voltar(); }
-    function aplicaEscala(centro) {
-      if (!svgEl) return;
-      var antes = { sl: area.scrollLeft, st: area.scrollTop, cw: area.clientWidth, ch: area.clientHeight, e: svgEl.__e || 1 };
-      svgEl.__e = escala; svgEl.setAttribute('width', Math.round(base.w * escala)); svgEl.setAttribute('height', Math.round(base.h * escala));
-      if (centro) { var f = escala / antes.e; area.scrollLeft = (antes.sl + antes.cw / 2) * f - antes.cw / 2; area.scrollTop = (antes.st + antes.ch / 2) * f - antes.ch / 2; }
+    function aplicaTransform() {
+      if (inner) inner.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + sc + ')';
     }
-    function zoom(f) { escala = Math.max(0.2, Math.min(3, escala * f)); aplicaEscala(true); }
-    function ajustar() { escala = Math.max(0.2, Math.min(1, (area.clientWidth - 8) / base.w)); aplicaEscala(false); area.scrollLeft = 0; area.scrollTop = 0; }
+    function zoomAt(newSc, px, py) {
+      var r = newSc / sc; tx = px - (px - tx) * r; ty = py - (py - ty) * r; sc = newSc; aplicaTransform();
+    }
+    function zoom(f) { zoomAt(Math.max(0.12, Math.min(4, sc * f)), area.clientWidth / 2, area.clientHeight / 2); }
+    function ajustar() {
+      sc = Math.max(0.12, Math.min(1, (area.clientWidth - 16) / base.w)); tx = 8; ty = 8; aplicaTransform();
+    }
 
-    /* busca */
-    var matchIds = [], matchTerm = '', matchIdx = -1, cntBusca;
-
+    function getSubtree(id) {
+      var sub = {};
+      function col(nid) { sub[nid] = true; (ix.kids[nid] || []).forEach(col); }
+      col(id); return sub;
+    }
+    function aplicarFoco(id) {
+      var sub = getSubtree(id); focoAtivo = true;
+      inner.querySelectorAll('.cc-nd').forEach(function (el) {
+        var nid = el.getAttribute('data-nid'), dentro = !!sub[nid];
+        el.classList.toggle('foco-fora', !dentro); el.classList.toggle('foco-dentro', dentro);
+      });
+      inner.querySelectorAll('.cc-edge').forEach(function (el) { el.classList.add('foco-fora'); });
+    }
+    function removerFoco() {
+      focoAtivo = false;
+      if (inner) inner.querySelectorAll('.foco-fora,.foco-dentro,.busca-foco').forEach(function (el) {
+        el.classList.remove('foco-fora', 'foco-dentro', 'busca-foco');
+      });
+    }
     function focarNo(id) {
       var p = posMap[id]; if (!p) return;
-      area.scrollLeft = Math.max(0, p.x * escala + nodeW * escala / 2 - area.clientWidth / 2);
-      area.scrollTop  = Math.max(0, p.y * escala + nodeH * escala / 2 - area.clientHeight / 2);
-      area.querySelectorAll('.cc-nd.busca-foco').forEach(function (el) { el.classList.remove('busca-foco'); });
-      var el = area.querySelector('[data-nid="' + id.replace(/"/g, '\\"') + '"]');
+      var nh = nodeHMap[id] || nodeHMin;
+      tx = area.clientWidth / 2 - (p.x + nodeW / 2) * sc;
+      ty = area.clientHeight / 2 - (p.y + nh / 2) * sc;
+      aplicaTransform();
+      inner.querySelectorAll('.cc-nd.busca-foco').forEach(function (el) { el.classList.remove('busca-foco'); });
+      var el = inner.querySelector('[data-nid="' + id.replace(/"/g, '\\"') + '"]');
       if (el) el.classList.add('busca-foco');
+      aplicarFoco(id);
     }
-
     function buscar(avancar) {
       var t = inputBusca.value.trim().toUpperCase();
-      if (!t) { matchIds = []; matchTerm = ''; matchIdx = -1; cntBusca.textContent = ''; return; }
+      if (!t) { matchIds = []; matchTerm = ''; matchIdx = -1; cntBusca.textContent = ''; removerFoco(); return; }
       if (t !== matchTerm) {
         matchTerm = t; matchIdx = -1; matchIds = [];
         Object.keys(ix.nodes).forEach(function (id) {
-          var n = ix.nodes[id];
-          if (!posMap[id]) return;
+          var n = ix.nodes[id]; if (!posMap[id]) return;
           if (n.nome.toUpperCase().indexOf(t) >= 0 || id.toUpperCase().indexOf(t) >= 0 || (n.rotulo && n.rotulo.toUpperCase().indexOf(t) >= 0)) matchIds.push(id);
         });
       }
-      if (!matchIds.length) { cntBusca.textContent = '0 resultados'; return; }
+      if (!matchIds.length) { cntBusca.textContent = '0 resultados'; removerFoco(); return; }
       matchIdx = avancar ? (matchIdx + 1) % matchIds.length : 0;
       focarNo(matchIds[matchIdx]);
       cntBusca.textContent = (matchIdx + 1) + ' / ' + matchIds.length;
     }
 
-    /* toolbar */
-    var barra = h('div', { class: 'cc-dg-bar' });
-    barra.appendChild(h('button', { class: 'op-btn go', type: 'button', text: '← Causa Comum', onclick: sair }));
-    barra.appendChild(h('b', { class: 'cc-nome', text: 'TOPOLOGIA COMPLETA' }));
-    var nFalha = Object.keys(falhaIds).length;
-    if (nFalha) barra.appendChild(h('span', { class: 'cc-meta', text: nFalha + ' site(s) fora destacado(s)' }));
+    function sair() { if (PAN_OFF) PAN_OFF(); CC.vendoDiagrama = false; voltar(); }
 
-    /* campo de busca */
-    var inputBusca = h('input', { type: 'text', class: 'tmg-input', placeholder: 'Buscar site…   Enter = próximo' });
-    inputBusca.style.cssText = 'width:200px;height:28px;font-size:12px;padding:2px 8px;';
-    cntBusca = h('span', { class: 'cc-meta', style: { minWidth: '72px' }, text: '' });
+    var styleEl = document.createElement('style');
+    styleEl.textContent = [
+      '.cc-nd.busca-foco rect{stroke:#ffe066!important;stroke-width:3px!important;filter:drop-shadow(0 0 8px #ffe066);}',
+      '.cc-nd.falha rect{stroke:#e74c3c;stroke-width:2.5px;animation:cc-pulse-falha 1.8s ease-in-out infinite;}',
+      '@keyframes cc-pulse-falha{0%,100%{stroke:#e74c3c;stroke-width:2.5;filter:drop-shadow(0 0 4px rgba(231,76,60,.5));}50%{stroke:#ff5252;stroke-width:4;filter:drop-shadow(0 0 14px #e74c3c);}}',
+      '.cc-nd.foco-fora{opacity:0.09;transition:opacity .25s;}',
+      '.cc-nd.foco-fora rect{animation:none!important;}',
+      '.cc-edge.foco-fora{opacity:0.05;transition:opacity .25s;}',
+      '.cc-topo-area{cursor:grab;overflow:hidden;position:relative;user-select:none;height:calc(100vh - 270px);min-height:400px;}',
+      '.cc-topo-area.arr{cursor:grabbing;}',
+      '.cc-topo-inner{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;}'
+    ].join('');
+    box.appendChild(styleEl);
+
+    var hdr = h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px 8px', borderBottom: '1px solid var(--op-divider,#2a2a38)', flexWrap: 'wrap' } });
+    hdr.appendChild(h('button', { class: 'op-btn go', type: 'button', text: '← Causa Comum', onclick: sair }));
+    hdr.appendChild(h('b', { style: { fontSize: '13px', letterSpacing: '.07em', flex: '1' }, text: 'TOPOLOGIA COMPLETA' }));
+    var nFalha = Object.keys(falhaIds).length;
+    if (nFalha) hdr.appendChild(h('span', { class: 'op-tag', style: { background: '#e74c3c', fontSize: '11px' }, text: nFalha + ' fora' }));
+    box.appendChild(hdr);
+
+    var ctls = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: 'var(--op-bg2,rgba(0,0,0,.18))', borderBottom: '1px solid var(--op-divider,#2a2a38)', flexWrap: 'wrap' } });
+    inputBusca = h('input', { type: 'text', class: 'tmg-input', placeholder: 'Buscar site…  (Enter = próximo)' });
+    inputBusca.style.cssText = 'width:188px;height:28px;font-size:12px;padding:2px 10px;flex-shrink:0;';
+    cntBusca = h('span', { style: { fontSize: '11px', color: 'var(--op-muted,#8a8a93)', minWidth: '66px' }, text: '' });
     inputBusca.addEventListener('keydown', function (e) {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
+      if (e.key !== 'Enter') return; e.preventDefault();
       buscar(inputBusca.value.trim().toUpperCase() === matchTerm && matchIdx >= 0);
     });
     inputBusca.addEventListener('input', function () {
-      matchIds = []; matchTerm = ''; matchIdx = -1; cntBusca.textContent = '';
-      area.querySelectorAll('.cc-nd.busca-foco').forEach(function (el) { el.classList.remove('busca-foco'); });
+      if (!inputBusca.value.trim()) { matchIds = []; matchTerm = ''; matchIdx = -1; cntBusca.textContent = ''; removerFoco(); }
     });
-    var wrapBusca = h('span', { class: 'cc-zoom', style: { gap: '6px' } });
-    wrapBusca.appendChild(inputBusca); wrapBusca.appendChild(cntBusca);
-    barra.appendChild(wrapBusca);
-
-    barra.appendChild(h('span', { class: 'cc-zoom' }, [
+    ctls.appendChild(inputBusca); ctls.appendChild(cntBusca);
+    ctls.appendChild(h('span', { style: { flex: '1' } }));
+    ctls.appendChild(h('span', { style: { display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11px', color: 'var(--op-muted,#8a8a93)' } }, [
+      h('span', { class: 'lg fora', style: { fontSize: '11px' }, text: 'Fora s/ TSK' }),
+      h('span', { class: 'lg tsk', style: { fontSize: '11px' }, text: 'Fora c/ TSK' }),
+      h('span', { class: 'lg ok', style: { fontSize: '11px' }, text: 'Normal' })
+    ]));
+    ctls.appendChild(h('span', { style: { display: 'flex', gap: '4px', marginLeft: '6px' } }, [
       h('button', { class: 'op-btn', type: 'button', title: 'Reduzir', text: '−', onclick: function () { zoom(0.85); } }),
       h('button', { class: 'op-btn', type: 'button', title: 'Ajustar à tela', text: 'Ajustar', onclick: ajustar }),
       h('button', { class: 'op-btn', type: 'button', title: 'Ampliar', text: '+', onclick: function () { zoom(1.18); } })
     ]));
-    box.appendChild(barra);
+    box.appendChild(ctls);
+    box.appendChild(h('div', { style: { fontSize: '11px', color: 'var(--op-muted,#8a8a93)', padding: '3px 14px 5px' }, text: 'Clique e arraste para mover · roda do mouse para zoom · Enter na busca = próximo · clique no fundo para sair do foco' }));
 
-    /* injetar CSS do destaque de busca na caixa */
-    var styleTag = document.createElement('style');
-    styleTag.textContent = '.cc-nd.busca-foco rect{stroke:#ffe066!important;stroke-width:3px!important;filter:drop-shadow(0 0 7px #ffe066);}';
-    box.appendChild(styleTag);
-
-    box.appendChild(h('div', { class: 'cc-legend' }, [
-      h('span', { class: 'lg fora', text: 'Site fora (sem TSK)' }),
-      h('span', { class: 'lg tsk', text: 'Site fora (com TSK)' }),
-      h('span', { class: 'lg ok', text: 'Normal' }),
-      h('span', { class: 'cc-dica', text: 'Arraste para mover · Ctrl + roda (ou + / −) para zoom · Enter na busca = próximo resultado' })
-    ]));
+    area = h('div', { class: 'cc-topo-area' });
     box.appendChild(area);
 
-    /* layout em árvore */
-    var itens = [], arestas = [], folha = 0, maxCol = 0;
+    var itens = [], arestas = [], maxCol = 0, currentY = 0;
     var allIds = Object.keys(ix.nodes);
-
-    /* raízes: nós sem pai ou cujo pai não existe no índice */
     var rootIds = allIds.filter(function (id) {
       var n = ix.nodes[id]; return !n.pid || !ix.nodes[n.pid];
     }).sort(function (a, b) { return (ix.desc[b] || 0) - (ix.desc[a] || 0); });
@@ -584,77 +612,100 @@
     function visita(id, col) {
       if (visited[id]) return null;
       visited[id] = true;
-      var it = { id: id, col: col, tipo: falhaIds[id] ? 'falha' : 'ok' };
+      var nh = calcNodeH(id);
+      var kids = (ix.kids[id] || []).filter(function (k) { return !visited[k]; });
+      var it = { id: id, col: col, tipo: falhaIds[id] ? 'falha' : 'ok', nh: nh };
       maxCol = Math.max(maxCol, col);
-      var fs = (ix.kids[id] || []).filter(function (k) { return !visited[k]; });
-      if (!fs.length) {
-        it.y = folha++;
+      if (!kids.length) {
+        it.ty = currentY; currentY += nh + GAP;
       } else {
-        var ys = [];
-        fs.forEach(function (k) { var c = visita(k, col + 1); if (c) { arestas.push([id, k]); ys.push(c.y); } });
-        it.y = ys.length ? (ys[0] + ys[ys.length - 1]) / 2 : folha++;
+        var first = null, last = null;
+        kids.forEach(function (k) {
+          var c = visita(k, col + 1);
+          if (c) { arestas.push([id, k]); if (!first) first = c; last = c; }
+        });
+        if (!first) { it.ty = currentY; currentY += nh + GAP; }
+        else { it.ty = Math.round((first.ty + last.ty + last.nh - nh) / 2); }
       }
       itens.push(it); return it;
     }
-
-    rootIds.forEach(function (id, i) { if (i > 0) folha++; visita(id, 0); });
-
-    /* nós soltos (ciclos ou raízes não alcançadas) */
-    var restantes = allIds.filter(function (id) { return !visited[id]; });
-    if (restantes.length) {
-      folha++;
-      restantes.forEach(function (id) {
-        if (visited[id]) return;
-        visited[id] = true;
-        itens.push({ id: id, col: 0, tipo: falhaIds[id] ? 'falha' : 'ok', y: folha++ });
+    rootIds.forEach(function (id, i) { if (i > 0) currentY += 24; visita(id, 0); });
+    var disconnected = allIds.filter(function (id) { return !visited[id]; });
+    if (disconnected.length) {
+      currentY += 24;
+      disconnected.forEach(function (id) {
+        if (visited[id]) return; visited[id] = true;
+        var nh = calcNodeH(id); itens.push({ id: id, col: 0, tipo: falhaIds[id] ? 'falha' : 'ok', nh: nh, ty: currentY }); currentY += nh + GAP;
       });
     }
 
-    var W = (maxCol + 1) * colW + pad * 2;
-    var H = Math.max(1, folha) * rowH + pad * 2;
-    var el = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'cc-svg' });
-    var pos = {};
-    itens.forEach(function (x) { pos[x.id] = { x: pad + x.col * colW, y: pad + x.y * rowH }; posMap[x.id] = pos[x.id]; });
+    var W = (maxCol + 1) * colW + pad * 2, H = currentY + pad;
+    var svgEl = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, class: 'cc-svg' });
+    svgEl.style.cssText = 'display:block;overflow:visible;';
 
-    /* arestas */
+    itens.forEach(function (x) { posMap[x.id] = { x: pad + x.col * colW, y: x.ty }; nodeHMap[x.id] = x.nh; });
+
     arestas.forEach(function (a) {
-      var p = pos[a[0]], q = pos[a[1]]; if (!p || !q) return;
-      var x1 = p.x + nodeW, y1 = p.y + nodeH / 2, x2 = q.x, y2 = q.y + nodeH / 2, mx = (x1 + x2) / 2;
-      el.appendChild(svg('path', { d: 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2, class: 'cc-edge' + (falhaIds[a[0]] && falhaIds[a[1]] ? ' f' : '') }));
+      var p = posMap[a[0]], q = posMap[a[1]]; if (!p || !q) return;
+      var nh0 = nodeHMap[a[0]] || nodeHMin, nh1 = nodeHMap[a[1]] || nodeHMin;
+      var x1 = p.x + nodeW, y1 = p.y + nh0 / 2, x2 = q.x, y2 = q.y + nh1 / 2, mx = (x1 + x2) / 2;
+      svgEl.appendChild(svg('path', { d: 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2, class: 'cc-edge' + (falhaIds[a[0]] && falhaIds[a[1]] ? ' f' : '') }));
     });
 
-    /* nós */
     itens.forEach(function (x) {
-      var n2 = ix.nodes[x.id], p = pos[x.id];
-      var kids = ix.kids[x.id] || [];
-      var cls = 'cc-nd ' + x.tipo;
-      var gr = svg('g', { class: cls, 'data-nid': x.id, transform: 'translate(' + p.x + ',' + p.y + ')' });
+      var n2 = ix.nodes[x.id], p = posMap[x.id], nh = x.nh, kids = ix.kids[x.id] || [];
+      var gr = svg('g', { class: 'cc-nd ' + x.tipo, 'data-nid': x.id, transform: 'translate(' + p.x + ',' + p.y + ')' });
       gr.appendChild(svg('title', {}, n2.nome + (n2.rotulo ? '\n' + n2.rotulo : '') + '\nFilhos: ' + kids.length + (falhaIds[x.id] ? '\n[FORA]' : '')));
-      gr.appendChild(svg('rect', { width: nodeW, height: nodeH, rx: 8 }));
-      gr.appendChild(svg('text', { x: 10, y: 15, class: 'n1' }, cortaTxt(n2.nome.split('|')[0], 22)));
-      var l2 = n2.rotulo ? cortaTxt(n2.rotulo.replace(/^\(\d+\)\s*/, ''), 32) : (kids.length ? kids.length + ' filho(s)' : '');
-      if (falhaIds[x.id]) l2 = 'FORA' + (l2 ? ' · ' + l2 : '');
-      gr.appendChild(svg('text', { x: 10, y: 29, class: 'n2' }, l2));
-      if (kids.length) gr.appendChild(svg('text', { x: nodeW - 8, y: 15, class: 'n3', 'text-anchor': 'end' }, kids.length + '↓'));
-      el.appendChild(gr);
+      gr.appendChild(svg('rect', { width: nodeW, height: nh, rx: 8 }));
+      var ly1 = nh > 48 ? Math.round(nh / 2) - 8 : Math.round(nh / 2) + 4;
+      gr.appendChild(svg('text', { x: 10, y: ly1, class: 'n1' }, cortaTxt(n2.nome.split('|')[0], 22)));
+      if (nh > 44) {
+        var l2 = n2.rotulo ? cortaTxt(n2.rotulo.replace(/^\(\d+\)\s*/, ''), 32) : (kids.length ? kids.length + ' filho(s)' : '');
+        if (falhaIds[x.id]) l2 = 'FORA' + (l2 ? ' · ' + l2 : '');
+        if (l2) gr.appendChild(svg('text', { x: 10, y: ly1 + 16, class: 'n2' }, l2));
+      }
+      if (kids.length) gr.appendChild(svg('text', { x: nodeW - 8, y: ly1, class: 'n3', 'text-anchor': 'end' }, kids.length + '↓'));
+      svgEl.appendChild(gr);
     });
 
-    area.appendChild(el); svgEl = el; base = { w: W, h: H };
-    escala = Math.max(0.2, Math.min(0.9, (area.clientWidth - 8) / W));
-    aplicaEscala(false);
+    inner = h('div', { class: 'cc-topo-inner' });
+    inner.appendChild(svgEl);
+    area.appendChild(inner);
+    base = { w: W, h: H };
 
-    /* arrastar + roda */
-    var pan = { on: false, x: 0, y: 0, sl: 0, st: 0, mov: false };
-    function down(e) { if (e.button !== 0) return; pan.on = true; pan.mov = false; pan.x = e.clientX; pan.y = e.clientY; pan.sl = area.scrollLeft; pan.st = area.scrollTop; area.classList.add('arr'); e.preventDefault(); }
-    function move(e) { if (!pan.on) return; var dx = e.clientX - pan.x, dy = e.clientY - pan.y; if (Math.abs(dx) + Math.abs(dy) > 4) pan.mov = true; area.scrollLeft = pan.sl - dx; area.scrollTop = pan.st - dy; }
+    requestAnimationFrame(function () {
+      sc = Math.max(0.12, Math.min(0.9, (area.clientWidth || 700) / W * 0.9));
+      tx = 8; ty = 8; aplicaTransform();
+    });
+
+    var pan = { on: false, x: 0, y: 0, tx0: 0, ty0: 0, mov: false };
+    function down(e) {
+      if (e.button !== 0) return; pan.on = true; pan.mov = false; pan.x = e.clientX; pan.y = e.clientY;
+      pan.tx0 = tx; pan.ty0 = ty; area.classList.add('arr'); e.preventDefault();
+    }
+    function move(e) {
+      if (!pan.on) return; var dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) pan.mov = true;
+      tx = pan.tx0 + dx; ty = pan.ty0 + dy; aplicaTransform();
+    }
     function up2() { pan.on = false; area.classList.remove('arr'); }
-    function roda(e) { e.preventDefault(); if (e.ctrlKey || e.metaKey) zoom(e.deltaY < 0 ? 1.12 : 0.89); else { area.scrollTop += e.deltaY; area.scrollLeft += e.deltaX || (e.shiftKey ? e.deltaY : 0); } }
+    function roda(e) {
+      e.preventDefault(); var r = area.getBoundingClientRect();
+      zoomAt(Math.max(0.12, Math.min(4, sc * (e.deltaY < 0 ? 1.12 : 0.89))), e.clientX - r.left, e.clientY - r.top);
+    }
+    function clique(e) {
+      if (pan.mov) { pan.mov = false; return; }
+      if (!e.target.closest('.cc-nd') && focoAtivo) {
+        removerFoco(); inputBusca.value = ''; matchIds = []; matchTerm = ''; matchIdx = -1; cntBusca.textContent = '';
+      }
+    }
     area.addEventListener('mousedown', down); window.addEventListener('mousemove', move); window.addEventListener('mouseup', up2);
-    area.addEventListener('wheel', roda, { passive: false });
+    area.addEventListener('wheel', roda, { passive: false }); area.addEventListener('click', clique);
     PAN_OFF = function () { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up2); PAN_OFF = null; };
     if (TMG.theme && TMG.theme.adapt) TMG.theme.adapt(box);
   }
 
+  /* ================= tela: pontos comuns (topologia) ================= */
   /* ================= tela: pontos comuns (topologia) ================= */
   function textoCopia(s) {
     var l = ['*CAUSA COMUM PROVÁVEL: ' + s.nome + '*' + (s.rotulo ? ' (' + s.rotulo + ')' : ''), s.falhos + ' de ' + s.total + ' pontos abaixo estão fora (' + Math.round(s.pct * 100) + '%)'];
@@ -670,7 +721,9 @@
     var st = res.stats, pctMap = st.totSites ? Math.round(st.totMapeados / st.totSites * 100) : 0;
     box.appendChild(h('div', { class: 'cc-intro' }, [
       h('span', { class: 'cc-cov', text: st.totMapeados + ' de ' + st.totSites + ' sites (' + pctMap + '%) têm correspondência no diagrama · ' + res.suspeitos.length + ' concentrador' + (res.suspeitos.length !== 1 ? 'es' : '') + ((res.pais || []).length ? ' · ' + res.pais.length + ' pai' + (res.pais.length !== 1 ? 's' : '') + ' com vários sites fora' : '') + (st.totIgnorados ? ' · ' + st.totIgnorados + ' site(s) desconsiderado(s) pelo tipo de falha' : '') }),
-      h('button', { class: 'op-btn', type: 'button', title: 'Mostra a topologia completa com todos os nós, busca e destaque dos sites em falha', text: 'Ver topologia completa', onclick: function () { desenharTopologiaCompleta(box, res, A, lista); } })
+    ]));
+    box.appendChild(h('div', { style: { textAlign: 'right', padding: '2px 2px 10px' } }, [
+      h('button', { class: 'op-btn', type: 'button', style: { fontWeight: '600', letterSpacing: '.04em' }, text: 'TOPOLOGIA COMPLETA →', onclick: function () { desenharTopologiaCompleta(box, res, A, lista); } })
     ]));
     if (!res.suspeitos.length && !(res.pais || []).length) box.appendChild(h('div', { class: 'op-empty', text: 'Nenhum ponto comum encontrado com os filtros atuais. 👏' }));
     function cartao(s, i) {
