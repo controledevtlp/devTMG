@@ -685,10 +685,7 @@
     itens.forEach(function (x) {
       var n2 = ix.nodes[x.id], p = posMap[x.id], nh = x.nh, kids = ix.kids[x.id] || [];
       var gr = svg('g', { class: 'cc-nd ' + x.tipo, 'data-nid': x.id, transform: 'translate(' + p.x + ',' + p.y + ')' });
-      gr.appendChild(svg('title', {}, n2.nome + (n2.rotulo ? '
-' + n2.rotulo : '') + '
-Filhos: ' + kids.length + (falhaIds[x.id] ? '
-[FORA]' : '')));
+      gr.appendChild(svg('title', {}, n2.nome + (n2.rotulo ? '\n' + n2.rotulo : '') + '\nFilhos: ' + kids.length + (falhaIds[x.id] ? '\n[FORA]' : '')));
       gr.appendChild(svg('rect', { width: nodeW, height: nh, rx: 8 }));
       var ly1 = nh > 48 ? Math.round(nh / 2) - 8 : Math.round(nh / 2) + 4;
       gr.appendChild(svg('text', { x: 10, y: ly1, class: 'n1' }, cortaTxt(n2.nome.split('|')[0], 22)));
@@ -756,6 +753,7 @@ Filhos: ' + kids.length + (falhaIds[x.id] ? '
     if (TMG.theme && TMG.theme.adapt) TMG.theme.adapt(box);
   }
 
+  /* ================= tela: pontos comuns (topologia) ================= */
   /* ================= tela: pontos comuns (topologia) ================= */
   /* ================= tela: pontos comuns (topologia) ================= */
   /* ================= tela: pontos comuns (topologia) ================= */
