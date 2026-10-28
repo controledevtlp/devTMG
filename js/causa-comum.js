@@ -489,12 +489,13 @@
     }
 
     var tx = 0, ty = 0, sc = 1, base = { w: 1, h: 1 }, inner = null;
-    var posMap = {}, nodeHMap = {};
+    var posMap = {}, nodeHMap = {}, nodeElMap = {}, lastFocoEl = null;
     var matchIds = [], matchTerm = '', matchIdx = -1, focoAtivo = false;
-    var cntBusca, inputBusca, area;
+    var cntBusca, inputBusca, area, rafId = null;
 
+    /* ── transform GPU-acelerado via translate3d ── */
     function aplicaTransform() {
-      if (inner) inner.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + sc + ')';
+      if (inner) inner.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + sc + ')';
     }
     function zoomAt(newSc, px, py) {
       var r = newSc / sc; tx = px - (px - tx) * r; ty = py - (py - ty) * r; sc = newSc; aplicaTransform();
@@ -504,24 +505,34 @@
       sc = Math.max(0.12, Math.min(1, (area.clientWidth - 16) / base.w)); tx = 8; ty = 8; aplicaTransform();
     }
 
+    /* ── getSubtree iterativo (sem recursão, sem stack overflow) ── */
     function getSubtree(id) {
-      var sub = {};
-      function col(nid) { sub[nid] = true; (ix.kids[nid] || []).forEach(col); }
-      col(id); return sub;
+      var sub = {}, queue = [id];
+      while (queue.length) {
+        var nid = queue.pop(); if (sub[nid]) continue; sub[nid] = true;
+        (ix.kids[nid] || []).forEach(function (k) { if (!sub[k]) queue.push(k); });
+      }
+      return sub;
     }
+
+    /* ── foco: CSS modo-foco + nodeElMap (O(1), sem querySelectorAll) ── */
     function aplicarFoco(id) {
       var sub = getSubtree(id); focoAtivo = true;
-      inner.querySelectorAll('.cc-nd').forEach(function (el) {
-        var nid = el.getAttribute('data-nid'), dentro = !!sub[nid];
-        el.classList.toggle('foco-fora', !dentro); el.classList.toggle('foco-dentro', dentro);
+      inner.classList.add('modo-foco');
+      Object.keys(nodeElMap).forEach(function (nid) {
+        var el = nodeElMap[nid], dentro = !!sub[nid];
+        el.classList.toggle('foco-fora', !dentro);
+        el.classList.toggle('foco-dentro', dentro);
       });
-      inner.querySelectorAll('.cc-edge').forEach(function (el) { el.classList.add('foco-fora'); });
     }
     function removerFoco() {
       focoAtivo = false;
-      if (inner) inner.querySelectorAll('.foco-fora,.foco-dentro,.busca-foco').forEach(function (el) {
-        el.classList.remove('foco-fora', 'foco-dentro', 'busca-foco');
+      if (!inner) return;
+      inner.classList.remove('modo-foco');
+      Object.keys(nodeElMap).forEach(function (nid) {
+        nodeElMap[nid].classList.remove('foco-fora', 'foco-dentro', 'busca-foco');
       });
+      lastFocoEl = null;
     }
     function focarNo(id) {
       var p = posMap[id]; if (!p) return;
@@ -529,9 +540,9 @@
       tx = area.clientWidth / 2 - (p.x + nodeW / 2) * sc;
       ty = area.clientHeight / 2 - (p.y + nh / 2) * sc;
       aplicaTransform();
-      inner.querySelectorAll('.cc-nd.busca-foco').forEach(function (el) { el.classList.remove('busca-foco'); });
-      var el = inner.querySelector('[data-nid="' + id.replace(/"/g, '\\"') + '"]');
-      if (el) el.classList.add('busca-foco');
+      if (lastFocoEl) lastFocoEl.classList.remove('busca-foco');
+      lastFocoEl = nodeElMap[id] || null;
+      if (lastFocoEl) lastFocoEl.classList.add('busca-foco');
       aplicarFoco(id);
     }
     function buscar(avancar) {
@@ -552,20 +563,28 @@
 
     function sair() { if (PAN_OFF) PAN_OFF(); CC.vendoDiagrama = false; voltar(); }
 
+    /* ── CSS injetado ── */
     var styleEl = document.createElement('style');
     styleEl.textContent = [
+      /* busca highlight */
       '.cc-nd.busca-foco rect{stroke:#ffe066!important;stroke-width:3px!important;filter:drop-shadow(0 0 8px #ffe066);}',
+      /* alerta pulsante para sites fora */
       '.cc-nd.falha rect{stroke:#e74c3c;stroke-width:2.5px;animation:cc-pulse-falha 1.8s ease-in-out infinite;}',
       '@keyframes cc-pulse-falha{0%,100%{stroke:#e74c3c;stroke-width:2.5;filter:drop-shadow(0 0 4px rgba(231,76,60,.5));}50%{stroke:#ff5252;stroke-width:4;filter:drop-shadow(0 0 14px #e74c3c);}}',
-      '.cc-nd.foco-fora{opacity:0.09;transition:opacity .25s;}',
-      '.cc-nd.foco-fora rect{animation:none!important;}',
-      '.cc-edge.foco-fora{opacity:0.05;transition:opacity .25s;}',
+      /* pausa animações durante o arrastar para zero lag */
+      '.cc-topo-area.arr *{animation-play-state:paused!important;}',
+      /* foco de busca: blur do que nao e filho */
+      '.cc-topo-inner.modo-foco .cc-nd.foco-fora{opacity:0.08;transition:opacity .2s;}',
+      '.cc-topo-inner.modo-foco .cc-nd.foco-fora rect{animation:none!important;}',
+      '.cc-topo-inner.modo-foco .cc-edge{opacity:0.05;transition:opacity .2s;}',
+      /* layout */
       '.cc-topo-area{cursor:grab;overflow:hidden;position:relative;user-select:none;height:calc(100vh - 270px);min-height:400px;}',
       '.cc-topo-area.arr{cursor:grabbing;}',
-      '.cc-topo-inner{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;}'
+      '.cc-topo-inner{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform;contain:layout style paint;}'
     ].join('');
     box.appendChild(styleEl);
 
+    /* ── header ── */
     var hdr = h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px 8px', borderBottom: '1px solid var(--op-divider,#2a2a38)', flexWrap: 'wrap' } });
     hdr.appendChild(h('button', { class: 'op-btn go', type: 'button', text: '← Causa Comum', onclick: sair }));
     hdr.appendChild(h('b', { style: { fontSize: '13px', letterSpacing: '.07em', flex: '1' }, text: 'TOPOLOGIA COMPLETA' }));
@@ -573,6 +592,7 @@
     if (nFalha) hdr.appendChild(h('span', { class: 'op-tag', style: { background: '#e74c3c', fontSize: '11px' }, text: nFalha + ' fora' }));
     box.appendChild(hdr);
 
+    /* ── barra de controles ── */
     var ctls = h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', background: 'var(--op-bg2,rgba(0,0,0,.18))', borderBottom: '1px solid var(--op-divider,#2a2a38)', flexWrap: 'wrap' } });
     inputBusca = h('input', { type: 'text', class: 'tmg-input', placeholder: 'Buscar site…  (Enter = próximo)' });
     inputBusca.style.cssText = 'width:188px;height:28px;font-size:12px;padding:2px 10px;flex-shrink:0;';
@@ -602,6 +622,7 @@
     area = h('div', { class: 'cc-topo-area' });
     box.appendChild(area);
 
+    /* ── layout com altura variavel por no ── */
     var itens = [], arestas = [], maxCol = 0, currentY = 0;
     var allIds = Object.keys(ix.nodes);
     var rootIds = allIds.filter(function (id) {
@@ -640,22 +661,34 @@
     }
 
     var W = (maxCol + 1) * colW + pad * 2, H = currentY + pad;
+
+    /* ── SVG: arestas combinadas em 2 <path> (normal + falha) ── */
     var svgEl = svg('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, class: 'cc-svg' });
-    svgEl.style.cssText = 'display:block;overflow:visible;';
+    svgEl.style.cssText = 'display:block;';
 
     itens.forEach(function (x) { posMap[x.id] = { x: pad + x.col * colW, y: x.ty }; nodeHMap[x.id] = x.nh; });
 
+    /* combinar todos os paths em 2 elementos SVG reduz DOM de centenas para 2 */
+    var dNorm = [], dFalha = [];
     arestas.forEach(function (a) {
       var p = posMap[a[0]], q = posMap[a[1]]; if (!p || !q) return;
       var nh0 = nodeHMap[a[0]] || nodeHMin, nh1 = nodeHMap[a[1]] || nodeHMin;
       var x1 = p.x + nodeW, y1 = p.y + nh0 / 2, x2 = q.x, y2 = q.y + nh1 / 2, mx = (x1 + x2) / 2;
-      svgEl.appendChild(svg('path', { d: 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2, class: 'cc-edge' + (falhaIds[a[0]] && falhaIds[a[1]] ? ' f' : '') }));
+      var d = 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2;
+      if (falhaIds[a[0]] && falhaIds[a[1]]) dFalha.push(d); else dNorm.push(d);
     });
+    if (dNorm.length) svgEl.appendChild(svg('path', { d: dNorm.join(' '), class: 'cc-edge' }));
+    if (dFalha.length) svgEl.appendChild(svg('path', { d: dFalha.join(' '), class: 'cc-edge f' }));
 
+    /* nos: usa DocumentFragment para inserção em lote */
+    var frag = document.createDocumentFragment();
     itens.forEach(function (x) {
       var n2 = ix.nodes[x.id], p = posMap[x.id], nh = x.nh, kids = ix.kids[x.id] || [];
       var gr = svg('g', { class: 'cc-nd ' + x.tipo, 'data-nid': x.id, transform: 'translate(' + p.x + ',' + p.y + ')' });
-      gr.appendChild(svg('title', {}, n2.nome + (n2.rotulo ? '\n' + n2.rotulo : '') + '\nFilhos: ' + kids.length + (falhaIds[x.id] ? '\n[FORA]' : '')));
+      gr.appendChild(svg('title', {}, n2.nome + (n2.rotulo ? '
+' + n2.rotulo : '') + '
+Filhos: ' + kids.length + (falhaIds[x.id] ? '
+[FORA]' : '')));
       gr.appendChild(svg('rect', { width: nodeW, height: nh, rx: 8 }));
       var ly1 = nh > 48 ? Math.round(nh / 2) - 8 : Math.round(nh / 2) + 4;
       gr.appendChild(svg('text', { x: 10, y: ly1, class: 'n1' }, cortaTxt(n2.nome.split('|')[0], 22)));
@@ -665,8 +698,10 @@
         if (l2) gr.appendChild(svg('text', { x: 10, y: ly1 + 16, class: 'n2' }, l2));
       }
       if (kids.length) gr.appendChild(svg('text', { x: nodeW - 8, y: ly1, class: 'n3', 'text-anchor': 'end' }, kids.length + '↓'));
-      svgEl.appendChild(gr);
+      nodeElMap[x.id] = gr;
+      frag.appendChild(gr);
     });
+    svgEl.appendChild(frag);
 
     inner = h('div', { class: 'cc-topo-inner' });
     inner.appendChild(svgEl);
@@ -678,17 +713,29 @@
       tx = 8; ty = 8; aplicaTransform();
     });
 
-    var pan = { on: false, x: 0, y: 0, tx0: 0, ty0: 0, mov: false };
+    /* ── pan com RAF throttle: 1 transform por frame ── */
+    var pan = { on: false, x: 0, y: 0, tx0: 0, ty0: 0, mov: false, dx: 0, dy: 0 };
     function down(e) {
-      if (e.button !== 0) return; pan.on = true; pan.mov = false; pan.x = e.clientX; pan.y = e.clientY;
-      pan.tx0 = tx; pan.ty0 = ty; area.classList.add('arr'); e.preventDefault();
+      if (e.button !== 0) return;
+      pan.on = true; pan.mov = false; pan.x = e.clientX; pan.y = e.clientY; pan.dx = 0; pan.dy = 0;
+      pan.tx0 = tx; pan.ty0 = ty;
+      inner.style.pointerEvents = 'none';   /* elimina hit-testing durante o arrasto */
+      area.classList.add('arr');             /* pausa animacoes CSS */
+      e.preventDefault();
     }
     function move(e) {
-      if (!pan.on) return; var dx = e.clientX - pan.x, dy = e.clientY - pan.y;
-      if (Math.abs(dx) + Math.abs(dy) > 3) pan.mov = true;
-      tx = pan.tx0 + dx; ty = pan.ty0 + dy; aplicaTransform();
+      if (!pan.on) return;
+      pan.dx = e.clientX - pan.x; pan.dy = e.clientY - pan.y;
+      if (Math.abs(pan.dx) + Math.abs(pan.dy) > 3) pan.mov = true;
+      if (!rafId) rafId = requestAnimationFrame(function () {
+        rafId = null; tx = pan.tx0 + pan.dx; ty = pan.ty0 + pan.dy; aplicaTransform();
+      });
     }
-    function up2() { pan.on = false; area.classList.remove('arr'); }
+    function up2() {
+      pan.on = false; area.classList.remove('arr');
+      inner.style.pointerEvents = '';       /* restaura hit-testing */
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    }
     function roda(e) {
       e.preventDefault(); var r = area.getBoundingClientRect();
       zoomAt(Math.max(0.12, Math.min(4, sc * (e.deltaY < 0 ? 1.12 : 0.89))), e.clientX - r.left, e.clientY - r.top);
@@ -701,10 +748,15 @@
     }
     area.addEventListener('mousedown', down); window.addEventListener('mousemove', move); window.addEventListener('mouseup', up2);
     area.addEventListener('wheel', roda, { passive: false }); area.addEventListener('click', clique);
-    PAN_OFF = function () { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up2); PAN_OFF = null; };
+    PAN_OFF = function () {
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up2);
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      PAN_OFF = null;
+    };
     if (TMG.theme && TMG.theme.adapt) TMG.theme.adapt(box);
   }
 
+  /* ================= tela: pontos comuns (topologia) ================= */
   /* ================= tela: pontos comuns (topologia) ================= */
   /* ================= tela: pontos comuns (topologia) ================= */
   function textoCopia(s) {
